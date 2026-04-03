@@ -1,9 +1,8 @@
 import shutil
 
-from fastapi import Depends, FastAPI, File, HTTPException, Path, Query, UploadFile, Form
+from fastapi import Depends, FastAPI, File, HTTPException, Path, Query, UploadFile
 from typing import Annotated
 from sqlmodel import Field, Session, SQLModel, create_engine, select
-from pydantic import BaseModel
 from pathlib import Path
 
 app = FastAPI()
@@ -16,7 +15,7 @@ class Foto(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     file: str | None = Field(index=True)
     comment: str | None = Field(index=True)
-    route: str | None = Field(index=True)
+    # route: str | None = Field(index=True)
     user: str | None = Field(index=True)
 
 # Motor del modelo
