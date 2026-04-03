@@ -1,9 +1,15 @@
-from fastapi import Depends, FastAPI, HTTPException, Query
+import shutil
+
+from fastapi import Depends, FastAPI, File, HTTPException, Path, Query, UploadFile, Form
 from typing import Annotated
 from sqlmodel import Field, Session, SQLModel, create_engine, select
+from pydantic import BaseModel
+from pathlib import Path
 
 app = FastAPI()
 
+UPLOAD_DIR = Path("./fotos")
+# UPLOAD_DIR.mkdir(exist_ok=True) crea la carpeta si no existe
 
 # Clase de la tabla Foto
 class Foto(SQLModel, table=True):
@@ -62,5 +68,32 @@ def read_foto(id: int, session: SessionDep) -> Foto:
         raise HTTPException(status_code=404, detail="Foto no encontrada")
     return foto
 
+# Subir un archivo
+@app.post("/uploadfile/")
+async def create_upload_file(file: UploadFile = File(...)):
+    #Construye la ruta con el nombre original del archivo
+    file_path = UPLOAD_DIR / file.filename
 
+    #Guarda el archivo en el disco
+    with open(file_path, "wb") as buffer:
+        #shutil copia eficientemente sin ocupar la RAM
+        shutil.copyfileobj(file.file, buffer)
+    return {"info": f"Fichero guardado en: {file_path}", "filename": file.filename}
 
+# Borrar un archivo
+@app.delete("/fotos/{filename}")
+async def delete_file(filename: str):
+    # Construïm la ruta completa del fitxer
+    file_path = UPLOAD_DIR / filename
+    
+    # 1. Verifiquem si el fitxer existeix realment
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="El fitxer no existeix")
+    
+    try:
+        # 2. Esborrem el fitxer de forma permanent
+        file_path.unlink()
+        return {"message": f"Fitxer '{filename}' esborrat correctament"}
+    except Exception as e:
+        # Per si hi ha problemes de permisos o el fitxer està en ús
+        raise HTTPException(status_code=500, detail=f"Error al borrar: {str(e)}")
