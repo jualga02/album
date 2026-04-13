@@ -10,6 +10,10 @@ from sqlmodel import Field, Session, SQLModel, create_engine, select
 from pathlib import Path
 from pydantic import BaseModel
 
+'''import debugpy
+debugpy.listen(("0.0.0.0", 5678))
+print("En espera del depurador en el puerto 5678...")'''
+
 app = FastAPI()
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
@@ -17,6 +21,15 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 UPLOAD_DIR = Path("./fotos")
 # UPLOAD_DIR.mkdir(exist_ok=True) crea la carpeta si no existe
 
+
+#Clase Users. Implementa la seguridad.
+class Users(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    username: str | None = Field(index=True)
+    full_name: str | None = Field(index=True)
+    email: str | None = Field(index=True)
+    hashed_password: str | None = Field(index=True)
+    # disable: bool | None = Field(index=True)
 
 
 
@@ -103,21 +116,46 @@ def get_password_hash(password):
     return password_hash.hash(password)
 
 
-def get_user(db, username: str):
+'''def get_user(db, username: str):
     if username in db:
         user_dict = db[username]
-        return UserInDB(**user_dict)
+        return UserInDB(**user_dict)'''
+
+'''def get_user(username:str, session: SessionDep):
+    user = session.get(Users, username)
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    return user'''
+
+def get_user(session: SessionDep, username:str):
+    user_query = select(Users).where(Users.username == username)
+    user = session.exec(user_query).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    return user
 
 
 
-def authenticate_user(fake_db, username: str, password: str):
+'''def authenticate_user(fake_db, username: str, password: str): ORIGINAL
     user = get_user(fake_db, username)
     if not user:
         verify_password(password, DUMMY_HASH)
         return False
     if not verify_password(password, user.hashed_password):
         return False
+    return user'''
+
+def authenticate_user(session: SessionDep, username: str, password: str ): 
+    user = get_user(session, username)
+    if not user:
+        verify_password(password, DUMMY_HASH)
+        return False
+    if not verify_password(password, user.hashed_password):
+        return False
     return user
+
+
+
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode = data.copy()
@@ -129,7 +167,7 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
+async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], session: SessionDep):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -143,7 +181,7 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
         token_data = TokenData(username=username)
     except InvalidTokenError:
         raise credentials_exception
-    user = get_user(fake_users_db, username=token_data.username)
+    user = get_user(session, username=token_data.username)
     if user is None:
         raise credentials_exception
     return user
@@ -152,12 +190,12 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
 
 
 async def get_current_active_user(current_user: Annotated[User, Depends(get_current_user)],):
-    if current_user.disable:
-        raise HTTPException(status_code=400, detail="Inactive user")
+   # if current_user.disable:
+    #    raise HTTPException(status_code=400, detail="Inactive user")
     return current_user
 
 
-@app.post("/token")
+'''@app.post("/token") ORIGINAL
 async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],) -> Token:
     user = authenticate_user(fake_users_db, form_data.username, form_data.password)
@@ -171,7 +209,27 @@ async def login_for_access_token(
     access_token = create_access_token(
         data={"sub": user.username}, expires_delta=access_token_expires
     )
+    return Token(access_token=access_token, token_type="bearer")'''
+
+
+@app.post("/token")
+async def login_for_access_token(
+    form_data: Annotated[OAuth2PasswordRequestForm, Depends()], session: SessionDep) -> Token:
+    user = authenticate_user(session, form_data.username, form_data.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
     return Token(access_token=access_token, token_type="bearer")
+
+
+
 
 
 @app.get("/users/me/")
@@ -185,6 +243,19 @@ async def read_own_items(
 
 
 # END SECURITY CODE ====================================================================
+
+
+# RUTAS TABLA USERS ====================================================================
+
+# Crear una entrada
+@app.post("/users/")
+def create_user(user: Users, session: SessionDep) -> Users:
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
+
+# Rutas tabla Fotos ________________________________________________________________
 @app.get("/")
 def read_root():
     return {"Hola":"desde nuestro Album"}
@@ -244,3 +315,6 @@ async def delete_file(filename: str):
     except Exception as e:
         # Per si hi ha problemes de permisos o el fitxer està en ús
         raise HTTPException(status_code=500, detail=f"Error al borrar: {str(e)}")
+
+
+# Fin rutas tabla fotos____________________________________________________________
