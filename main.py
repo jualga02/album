@@ -10,9 +10,7 @@ from sqlmodel import Field, Session, SQLModel, create_engine, select
 from pathlib import Path
 from pydantic import BaseModel
 
-'''import debugpy
-debugpy.listen(("0.0.0.0", 5678))
-print("En espera del depurador en el puerto 5678...")'''
+
 
 app = FastAPI()
 
@@ -116,16 +114,7 @@ def get_password_hash(password):
     return password_hash.hash(password)
 
 
-'''def get_user(db, username: str):
-    if username in db:
-        user_dict = db[username]
-        return UserInDB(**user_dict)'''
 
-'''def get_user(username:str, session: SessionDep):
-    user = session.get(Users, username)
-    if not user:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado")
-    return user'''
 
 def get_user(session: SessionDep, username:str):
     user_query = select(Users).where(Users.username == username)
@@ -136,14 +125,6 @@ def get_user(session: SessionDep, username:str):
 
 
 
-'''def authenticate_user(fake_db, username: str, password: str): ORIGINAL
-    user = get_user(fake_db, username)
-    if not user:
-        verify_password(password, DUMMY_HASH)
-        return False
-    if not verify_password(password, user.hashed_password):
-        return False
-    return user'''
 
 def authenticate_user(session: SessionDep, username: str, password: str ): 
     user = get_user(session, username)
@@ -195,21 +176,6 @@ async def get_current_active_user(current_user: Annotated[User, Depends(get_curr
     return current_user
 
 
-'''@app.post("/token") ORIGINAL
-async def login_for_access_token(
-    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],) -> Token:
-    user = authenticate_user(fake_users_db, form_data.username, form_data.password)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"}
-        )
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": user.username}, expires_delta=access_token_expires
-    )
-    return Token(access_token=access_token, token_type="bearer")'''
 
 
 @app.post("/token")
@@ -318,3 +284,51 @@ async def delete_file(filename: str):
 
 
 # Fin rutas tabla fotos____________________________________________________________
+
+
+'''
+#para debug
+import debugpy
+debugpy.listen(("0.0.0.0", 5678))
+print("En espera del depurador en el puerto 5678...")
+'''
+
+'''def get_user(db, username: str):
+    if username in db:
+        user_dict = db[username]
+        return UserInDB(**user_dict)'''
+
+'''def get_user(username:str, session: SessionDep):
+    user = session.get(Users, username)
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    return user'''
+
+
+'''def authenticate_user(fake_db, username: str, password: str): ORIGINAL
+    user = get_user(fake_db, username)
+    if not user:
+        verify_password(password, DUMMY_HASH)
+        return False
+    if not verify_password(password, user.hashed_password):
+        return False
+    return user
+'''
+
+
+'''@app.post("/token") ORIGINAL
+async def login_for_access_token(
+    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],) -> Token:
+    user = authenticate_user(fake_users_db, form_data.username, form_data.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
+    return Token(access_token=access_token, token_type="bearer")
+'''
