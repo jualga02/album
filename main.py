@@ -9,10 +9,25 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from pathlib import Path
 from pydantic import BaseModel
-
+from fastapi.middleware.cors import CORSMiddleware
 
 
 app = FastAPI()
+
+origins = [
+    "http://localhost.tiangolo.com",
+    "https://localhost.tiangolo.com",
+    "http://localhost",
+    "http://localhost:8080",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
@@ -21,14 +36,28 @@ UPLOAD_DIR = Path("./fotos")
 
 
 #Clase Users. Implementa la seguridad.
-class Users(SQLModel, table=True):
+'''Para que el campo contraseña no aparezca en la bbdd y el dato 'id' no 
+   aparezca en los datos solicitados al usuario, es necesario crear tres clases,
+   una común, otra para el usuario y una tercera para la bbdd.
+'''
+# Id como primer campo. Para que el campo 'id' aparezca el primero debe procesarse antes
+class Userid(SQLModel):
     id: int | None = Field(default=None, primary_key=True)
-    username: str | None = Field(index=True)
-    full_name: str | None = Field(index=True)
-    email: str | None = Field(index=True)
-    hashed_password: str | None = Field(index=True)
-    # disable: bool | None = Field(index=True)
 
+# Base común
+class Userbase(Userid):
+    username: str = Field(index=True, unique=True)
+    email: str
+    full_name: str
+
+# Datos del usuario
+class Usercreate(Userbase):
+    password: str
+
+# Tabla para la bbdd
+class Users(Userbase, table=True):    
+    hashed_password: str | None = Field(index=True)
+    disable: bool | None = Field(index=True, default=False)    
 
 
 # Clase de la tabla Foto
@@ -104,12 +133,14 @@ class User(BaseModel):
 class UserInDB(User):
     hashed_password: str    
 
+# El manejador de Argon2 será 'password_hash'
 password_hash = PasswordHash.recommended()
 DUMMY_HASH = password_hash.hash("dummypassword")
 
 def verify_password(plain_password, hashed_password):
     return password_hash.verify(plain_password, hashed_password)
 
+# Esta función genera la contraseña 'hasheada'
 def get_password_hash(password):    
     return password_hash.hash(password)
 
@@ -171,8 +202,8 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], sessio
 
 
 async def get_current_active_user(current_user: Annotated[User, Depends(get_current_user)],):
-   # if current_user.disable:
-    #    raise HTTPException(status_code=400, detail="Inactive user")
+    if current_user.disable:
+        raise HTTPException(status_code=400, detail="Inactive user")
     return current_user
 
 
@@ -215,11 +246,16 @@ async def read_own_items(
 
 # Crear una entrada
 @app.post("/users/")
-def create_user(user: Users, session: SessionDep) -> Users:
-    session.add(user)
+def create_user(user: Usercreate, session: SessionDep):
+    h_password = get_password_hash(user.password)
+
+    extra_data = user.model_dump(exclude={"password"})
+    db_user = Users(**extra_data, hashed_password=h_password)
+
+    session.add(db_user)
     session.commit()
-    session.refresh(user)
-    return user
+    session.refresh(db_user)
+    return {"message": "usuario creado para ","name": db_user.full_name }
 
 # Rutas tabla Fotos ________________________________________________________________
 @app.get("/")
@@ -331,4 +367,14 @@ async def login_for_access_token(
         data={"sub": user.username}, expires_delta=access_token_expires
     )
     return Token(access_token=access_token, token_type="bearer")
+'''
+
+'''class Users(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    username: str = Field(index=True)
+    password: str 
+    full_name: str | None = Field(index=True)
+    email: str | None = Field(index=True)
+    hashed_password: str | None = Field(index=True)
+    disable: bool | None = Field(index=True)
 '''
