@@ -2,9 +2,9 @@ import shutil
 import jwt
 from jwt.exceptions import InvalidTokenError
 from pwdlib import PasswordHash
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from fastapi import Depends, FastAPI, File, HTTPException, Path, Query, UploadFile, status
-from typing import Annotated
+from typing import Annotated, Optional
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from pathlib import Path
@@ -64,10 +64,13 @@ class Users(Userbase, table=True):
 class Foto(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     file: str | None = Field(index=True)
-    comment: str | None = Field(index=True)
-    # route: str | None = Field(index=True)
-    user: str | None = Field(index=True)
-
+    comment: str | None 
+    user_id: int | None = Field(default=None, index=True, foreign_key="users.id")
+    # up_date debe ser siempre null. La pondrá el sistema.
+    up_date: date | None = Field(default_factory=date.today, index=True)
+    # shot_date puede ser 'null' o un tipo string fecha: "yyyy-mm-dd"
+    shot_date: date | None = Field(default_factory=date.today, index=True)
+    tag: str | None = Field(index=True)
     
 
 # Motor del modelo
@@ -263,8 +266,10 @@ def read_root():
     return {"Hola":"desde nuestro Album"}
 
 # Crear una entrada
-@app.post("/fotos/")
-def create_foto(foto: Foto, session: SessionDep) -> Foto:
+@app.post("/new_foto/")
+def create_foto(foto: Foto, session: SessionDep, ) -> Foto:
+    if foto.shot_date != None:
+        foto.shot_date = date.fromisoformat(foto.shot_date)
     session.add(foto)
     session.commit()
     session.refresh(foto)
