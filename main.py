@@ -3,14 +3,16 @@ import jwt
 from jwt.exceptions import InvalidTokenError
 from pwdlib import PasswordHash
 from datetime import date, datetime, timedelta, timezone
-from fastapi import Depends, FastAPI, File, HTTPException, Path, Query, UploadFile, status
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Path, Query, UploadFile, status
 from typing import Annotated, Optional
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from pathlib import Path
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
+# Usar Jinja2 como motor de plantillas
 
 app = FastAPI()
 
@@ -30,15 +32,22 @@ app.add_middleware(
 )
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-
+DOWNLOAD_DIR = "http://localhost:8000/static/"
 UPLOAD_DIR = Path("./fotos")
 # UPLOAD_DIR.mkdir(exist_ok=True) crea la carpeta si no existe
+
+# Montar una carpeta para servir archivos estáticos
+# Ahora puedes acceder a la foto en: /static/nombre_de_la_foto.jpg
+app.mount("/static", StaticFiles(directory="fotos"), name="static")
+
+    
 
 
 #Clase Users. Implementa la seguridad.
 '''Para que el campo contraseña no aparezca en la bbdd y el dato 'id' no 
    aparezca en los datos solicitados al usuario, es necesario crear tres clases,
    una común, otra para el usuario y una tercera para la bbdd.
+   Aparte, para que la columna Id aparezca la primera, deberá procesarse en primer lugar.
 '''
 # Id como primer campo. Para que el campo 'id' aparezca el primero debe procesarse antes
 class Userid(SQLModel):
@@ -62,15 +71,22 @@ class Users(Userbase, table=True):
 
 # Clase de la tabla Foto
 class Foto(SQLModel, table=True):
+    #Este campo estará oculto al usuario en el frontend
     id: int | None = Field(default=None, primary_key=True)
+    #Este campo debe ser oculto tambien y añadido de forma automática
     file: str | None = Field(index=True)
+    #Oculto al usuario. Deberá reprogramarse en producción
+    url: str | None
     comment: str | None 
+    #Este campo estará oculto al usuario en el frontend
     user_id: int | None = Field(default=None, index=True, foreign_key="users.id")
     # up_date debe ser siempre null. La pondrá el sistema.
+    #Este campo estará oculto al usuario en el frontend
     up_date: date | None = Field(default_factory=date.today, index=True)
     # shot_date puede ser 'null' o un tipo string fecha: "yyyy-mm-dd"
     shot_date: date | None = Field(default_factory=date.today, index=True)
     tag: str | None = Field(index=True)
+    video: bool | None = Field(index=True)
     
 
 # Motor del modelo
@@ -91,6 +107,10 @@ SessionDep = Annotated[Session, Depends(get_session)]
 def create_db_and_tables():
     SQLModel.metadata.create_all(engine)
 
+# Ruta inicial
+@app.get("/")
+def read_root():
+    return {"Hola":"desde nuestro Album"}
 
 # ====================================================================
 # Security
@@ -98,23 +118,6 @@ def create_db_and_tables():
 SECRET_KEY = "a2c315dfbbc06c5e8571a69e8ef67492860313627195b2e23c9eb0fd2f75d42b"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
-
-fake_users_db = {
-    "johndoe": {
-        "username": "johndoe",
-        "full_name": "John Doe",
-        "email": "johndoe@example.com",
-        "hashed_password": "$argon2id$v=19$m=65536,t=3,p=4$wagCPXjifgvUFBzq4hqe3w$CYaIb8sB+wtD+Vu/P4uod1+Qof8h+1g7bbDlBID48Rc",
-        "disabled": False,
-    },
-    "alice": {
-        "username": "alice",
-        "full_name": "Alice Wonderson",
-        "email": "alice@example.com",
-        "hashed_password": "$argon2id$v=19$m=65536,t=3,p=4$wagCPXjifgvUFBzq4hqe3w$CYaIb8sB+wtD+Vu/P4uod1+Qof8h+1g7bbDlBID48Rc",
-        "disabled": False,
-    },
-}
 
 # Clase Token
 class Token(BaseModel):
@@ -125,16 +128,6 @@ class TokenData(BaseModel):
     username: str | None = None    
 
 
-
-# Clase User 
-class User(BaseModel):
-    username: str
-    email: str | None = None
-    full_name: str | None = None
-    disable: bool | None = None
-
-class UserInDB(User):
-    hashed_password: str    
 
 # El manejador de Argon2 será 'password_hash'
 password_hash = PasswordHash.recommended()
@@ -148,16 +141,12 @@ def get_password_hash(password):
     return password_hash.hash(password)
 
 
-
-
 def get_user(session: SessionDep, username:str):
     user_query = select(Users).where(Users.username == username)
     user = session.exec(user_query).first()
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     return user
-
-
 
 
 def authenticate_user(session: SessionDep, username: str, password: str ): 
@@ -168,8 +157,6 @@ def authenticate_user(session: SessionDep, username: str, password: str ):
     if not verify_password(password, user.hashed_password):
         return False
     return user
-
-
 
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None):
@@ -201,17 +188,15 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], sessio
         raise credentials_exception
     return user
 
-
-
-
-async def get_current_active_user(current_user: Annotated[User, Depends(get_current_user)],):
+# MODIFICADO
+async def get_current_active_user(current_user: Annotated[Users, Depends(get_current_user)],):
     if current_user.disable:
         raise HTTPException(status_code=400, detail="Inactive user")
     return current_user
 
 
 
-
+# Autentica a un usuario, el cual, debe haberse registrado previamente.
 @app.post("/token")
 async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()], session: SessionDep) -> Token:
@@ -231,14 +216,15 @@ async def login_for_access_token(
 
 
 
-
+# MODIFICADO. Devuelve el nombre del usuario registrado para mostrarlo en la web
 @app.get("/users/me/")
-async def read_users_me(current_user: Annotated[User, Depends(get_current_active_user)],) -> User:
+async def read_users_me(current_user: Annotated[Users, Depends(get_current_active_user)],) -> Users:
     return current_user
 
+# MODIFICADO. Devuelve todos los datos del usuario registrado para mostrar el perfil en la web
 @app.get("/users/me/items/")
 async def read_own_items(
-    current_user: Annotated[User, Depends(get_current_active_user)],):
+    current_user: Annotated[Users, Depends(get_current_active_user)],):
     return [{"item_id": "Foo", "owner": current_user.username}]
 
 
@@ -261,19 +247,50 @@ def create_user(user: Usercreate, session: SessionDep):
     return {"message": "usuario creado para ","name": db_user.full_name }
 
 # Rutas tabla Fotos ________________________________________________________________
-@app.get("/")
-def read_root():
-    return {"Hola":"desde nuestro Album"}
 
-# Crear una entrada
+
+# Crear una entrada  
 @app.post("/new_foto/")
-def create_foto(foto: Foto, session: SessionDep, ) -> Foto:
+async def create_foto(
+    shot_date: Annotated[str, Form()],
+    comment: Annotated[str, Form()],
+    tag: Annotated[str, Form()],
+    file: Annotated[UploadFile, File()],
+    video: Annotated[bool, Form()],
+    session: SessionDep, 
+    ) -> Foto:
+    foto = Foto()
+    foto.comment = comment
+    foto.id = None
+    foto.file = file.filename
+    foto.url = f"{DOWNLOAD_DIR}{foto.file}"
+    foto.user_id = 0
+    # "2025-01-01"
+    foto.shot_date =  shot_date         
+    foto.tag = tag
+    foto.video = video
+    # Corrección del tipo Date para la BBDD
     if foto.shot_date != None:
         foto.shot_date = date.fromisoformat(foto.shot_date)
+
+    # Subida del archivo
+    #Construye la ruta con el nombre original del archivo
+    file_path = UPLOAD_DIR / foto.file
+
+    #Guarda el archivo en el disco
+    with open(file_path, "wb") as buffer:
+        #shutil copia eficientemente sin ocupar la RAM
+        shutil.copyfileobj(file.file, buffer)
+    #return {"info": f"Fichero guardado en: {file_path}", "filename": file.filename}
+
+    # Añadido de datos a la BBDD
     session.add(foto)
     session.commit()
     session.refresh(foto)
     return foto
+
+
+
 
 # Devolver todos los registros
 @app.get("/fotos/")
@@ -291,19 +308,8 @@ def read_foto(id: int, session: SessionDep) -> Foto:
     foto = session.get(Foto, id)
     if not foto:
         raise HTTPException(status_code=404, detail="Foto no encontrada")
-    return foto
+    return {"datos": foto}
 
-# Subir un archivo
-@app.post("/uploadfile/")
-async def create_upload_file(file: UploadFile = File(...)):
-    #Construye la ruta con el nombre original del archivo
-    file_path = UPLOAD_DIR / file.filename
-
-    #Guarda el archivo en el disco
-    with open(file_path, "wb") as buffer:
-        #shutil copia eficientemente sin ocupar la RAM
-        shutil.copyfileobj(file.file, buffer)
-    return {"info": f"Fichero guardado en: {file_path}", "filename": file.filename}
 
 # Borrar un archivo
 @app.delete("/fotos/{filename}")
@@ -326,60 +332,4 @@ async def delete_file(filename: str):
 
 # Fin rutas tabla fotos____________________________________________________________
 
-
-'''
-#para debug
-import debugpy
-debugpy.listen(("0.0.0.0", 5678))
-print("En espera del depurador en el puerto 5678...")
-'''
-
-'''def get_user(db, username: str):
-    if username in db:
-        user_dict = db[username]
-        return UserInDB(**user_dict)'''
-
-'''def get_user(username:str, session: SessionDep):
-    user = session.get(Users, username)
-    if not user:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado")
-    return user'''
-
-
-'''def authenticate_user(fake_db, username: str, password: str): ORIGINAL
-    user = get_user(fake_db, username)
-    if not user:
-        verify_password(password, DUMMY_HASH)
-        return False
-    if not verify_password(password, user.hashed_password):
-        return False
-    return user
-'''
-
-
-'''@app.post("/token") ORIGINAL
-async def login_for_access_token(
-    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],) -> Token:
-    user = authenticate_user(fake_users_db, form_data.username, form_data.password)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"}
-        )
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": user.username}, expires_delta=access_token_expires
-    )
-    return Token(access_token=access_token, token_type="bearer")
-'''
-
-'''class Users(SQLModel, table=True):
-    id: int | None = Field(default=None, primary_key=True)
-    username: str = Field(index=True)
-    password: str 
-    full_name: str | None = Field(index=True)
-    email: str | None = Field(index=True)
-    hashed_password: str | None = Field(index=True)
-    disable: bool | None = Field(index=True)
-'''
+ 
