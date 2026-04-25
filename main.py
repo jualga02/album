@@ -11,6 +11,7 @@ from pathlib import Path
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from .routers import pics
 
 # Usar Jinja2 como motor de plantillas
 
@@ -107,10 +108,11 @@ SessionDep = Annotated[Session, Depends(get_session)]
 def create_db_and_tables():
     SQLModel.metadata.create_all(engine)
 
-# Ruta inicial
+app.include_router(pics.router)
+'''# Ruta inicial
 @app.get("/")
 def read_root():
-    return {"Hola":"desde nuestro Album"}
+    return {"Hola":"desde nuestro Album"}'''
 
 # ====================================================================
 # Security
