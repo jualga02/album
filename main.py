@@ -11,7 +11,6 @@ from pathlib import Path
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from .routers import pics
 
 # Usar Jinja2 como motor de plantillas
 
@@ -108,18 +107,18 @@ SessionDep = Annotated[Session, Depends(get_session)]
 def create_db_and_tables():
     SQLModel.metadata.create_all(engine)
 
-app.include_router(pics.router)
-'''# Ruta inicial
+
+# Ruta inicial
 @app.get("/")
 def read_root():
-    return {"Hola":"desde nuestro Album"}'''
+    return {"Hola":"desde nuestro Album"}
 
 # ====================================================================
 # Security
 # ====================================================================
 SECRET_KEY = "a2c315dfbbc06c5e8571a69e8ef67492860313627195b2e23c9eb0fd2f75d42b"
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 300
 
 # Clase Token
 class Token(BaseModel):
@@ -235,61 +234,94 @@ async def read_own_items(
 
 # RUTAS TABLA USERS ====================================================================
 
-# Crear una entrada
-@app.post("/users/")
+# Crear un nuevo usuario. 
+@app.post("/new_user/")
 def create_user(user: Usercreate, session: SessionDep):
-    h_password = get_password_hash(user.password)
+    #Comprobamos que el nombre de usuario no exista en la BBDD
+    user_query = select(Users).where(Users.username == user.username)
+    result = session.exec(user_query)
+    registry = result.first()
+    if not registry:
 
-    extra_data = user.model_dump(exclude={"password"})
-    db_user = Users(**extra_data, hashed_password=h_password)
+        h_password = get_password_hash(user.password)
 
-    session.add(db_user)
-    session.commit()
-    session.refresh(db_user)
-    return {"message": "usuario creado para ","name": db_user.full_name }
+        extra_data = user.model_dump(exclude={"password"})
+        db_user = Users(**extra_data, hashed_password=h_password)
 
-# Rutas tabla Fotos ________________________________________________________________
+        session.add(db_user)
+        session.commit()
+        session.refresh(db_user)
+        return {"message": "usuario creado para ","name": db_user.full_name }
+    
+    else:
+        return {"message": f"El usuario {user.username} ya existe en la BBDD"}
+
+# Borrar un usuario. PENDIENTE DE IMPLEMENTAR
+@app.delete("/delete_user/{username}")
+def delete_user(username: str, session: SessionDep):
+    user_query = select(Users).where(Users.username == username)
+    result = session.exec(user_query)
+    registry = result.first()
+    if not registry:
+         return {"message": f"El usuario {username} no se encuentra en la BBDD"}
+    else:
+        session.delete(registry)
+        session.commit()
+        return {"message": f"El usuario {username} se ha borrado satisfactoriamente"}
+
+# FIN USERS ===============================================================================
 
 
-# Crear una entrada  
+
+# RUTAS TABLA FOTOS =======================================================================
+
+
+# Crear una foto. 
 @app.post("/new_foto/")
 async def create_foto(
-    shot_date: Annotated[str, Form()],
-    comment: Annotated[str, Form()],
-    tag: Annotated[str, Form()],
-    file: Annotated[UploadFile, File()],
-    video: Annotated[bool, Form()],
-    session: SessionDep, 
-    ) -> Foto:
-    foto = Foto()
-    foto.comment = comment
-    foto.id = None
-    foto.file = file.filename
-    foto.url = f"{DOWNLOAD_DIR}{foto.file}"
-    foto.user_id = 0
-    # "2025-01-01"
-    foto.shot_date =  shot_date         
-    foto.tag = tag
-    foto.video = video
-    # Corrección del tipo Date para la BBDD
-    if foto.shot_date != None:
-        foto.shot_date = date.fromisoformat(foto.shot_date)
+        shot_date: Annotated[str, Form()],
+        comment: Annotated[str, Form()],
+        tag: Annotated[str, Form()],
+        file: Annotated[UploadFile, File()],
+        video: Annotated[bool, Form()],
+        session: SessionDep, 
+    )-> dict | Foto:
 
-    # Subida del archivo
-    #Construye la ruta con el nombre original del archivo
-    file_path = UPLOAD_DIR / foto.file
+    foto_query = select(Foto).where(Foto.file == file.filename)
+    result = session.exec(foto_query)
+    registry = result.first()
+    if not registry:
+        foto = Foto()
+        foto.comment = comment
+        foto.id = None
+        foto.file = file.filename
+        foto.url = f"{DOWNLOAD_DIR}{foto.file}"
+        foto.user_id = 0
+        # "2025-01-01"
+        foto.shot_date =  shot_date         
+        foto.tag = tag
+        foto.video = video
+        # Corrección del tipo Date para la BBDD
+        if foto.shot_date != None:
+            foto.shot_date = date.fromisoformat(foto.shot_date)
 
-    #Guarda el archivo en el disco
-    with open(file_path, "wb") as buffer:
-        #shutil copia eficientemente sin ocupar la RAM
-        shutil.copyfileobj(file.file, buffer)
-    #return {"info": f"Fichero guardado en: {file_path}", "filename": file.filename}
+        # Subida del archivo
+        #Construye la ruta con el nombre original del archivo
+        file_path = UPLOAD_DIR / foto.file
 
-    # Añadido de datos a la BBDD
-    session.add(foto)
-    session.commit()
-    session.refresh(foto)
-    return foto
+        #Guarda el archivo en el disco
+        with open(file_path, "wb") as buffer:
+            #shutil copia eficientemente sin ocupar la RAM
+            shutil.copyfileobj(file.file, buffer)
+        #return {"info": f"Fichero guardado en: {file_path}", "filename": file.filename}
+
+        # Añadido de datos a la BBDD
+        session.add(foto)
+        session.commit()
+        session.refresh(foto)
+        return foto
+    else:
+        return {"message": f"El archivo {file.filename} ya se encuentra en la BBDD"}
 
 
 
@@ -310,12 +342,21 @@ def read_foto(id: int, session: SessionDep) -> Foto:
     foto = session.get(Foto, id)
     if not foto:
         raise HTTPException(status_code=404, detail="Foto no encontrada")
-    return {"datos": foto}
+    return foto
 
 
-# Borrar un archivo
+# Borrar un archivo. 
 @app.delete("/fotos/{filename}")
-async def delete_file(filename: str):
+async def delete_file(session: SessionDep, filename: str):
+    # Borrado del registro en la BBDD
+    foto_query = select(Foto).where(Foto.file == filename)
+    result = session.exec(foto_query)
+    registry = result.first()
+    if not registry:
+        raise HTTPException(status_code=404, detail="Registro no encontrado")
+    session.delete(registry)
+    session.commit()
+
     # Construïm la ruta completa del fitxer
     file_path = UPLOAD_DIR / filename
     
@@ -326,12 +367,13 @@ async def delete_file(filename: str):
     try:
         # 2. Esborrem el fitxer de forma permanent
         file_path.unlink()
-        return {"message": f"Fitxer '{filename}' esborrat correctament"}
+        
     except Exception as e:
         # Per si hi ha problemes de permisos o el fitxer està en ús
         raise HTTPException(status_code=500, detail=f"Error al borrar: {str(e)}")
 
+    
+    return {"message": f"Archivo '{filename}' borrado correctamente"}
 
-# Fin rutas tabla fotos____________________________________________________________
-
+# FIN FOTOS  ===============================================================================
  
