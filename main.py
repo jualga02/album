@@ -21,6 +21,7 @@ origins = [
     "https://localhost.tiangolo.com",
     "http://localhost",
     "http://localhost:8080",
+    "http://localhost:4200"
 ]
 
 app.add_middleware(
@@ -55,19 +56,26 @@ class Userid(SQLModel):
 
 # Base común
 class Userbase(Userid):
-    username: str = Field(index=True, unique=True)
-    email: str
-    full_name: str
+    username: str | None = Field(index=True, unique=True)
+    email: str | None
+    full_name: str | None
 
 # Datos del usuario
 class Usercreate(Userbase):
-    password: str
+    password: str | None
 
 # Tabla para la bbdd
 class Users(Userbase, table=True):    
     hashed_password: str | None = Field(index=True)
     disable: bool | None = Field(index=True, default=False)    
+    rol: str | None = Field(default='user')
 
+# Tabla para actualizaciones de usuario en la tabla Users
+class UsersUpdate(BaseModel):
+    username: Optional[str] = None
+    email: Optional[str] = None
+    full_name: Optional[str] = None
+    password: Optional[str] = None    
 
 # Clase de la tabla Foto
 class Foto(SQLModel, table=True):
@@ -88,6 +96,14 @@ class Foto(SQLModel, table=True):
     tag: str | None = Field(index=True)
     video: bool | None = Field(index=True)
     
+# Clase para actualizaciones de usuario de la tabla Foto
+class FotoUpdate(BaseModel):
+    comment: Optional[str] = None
+    shot_date: Optional[date] = None
+    tag: Optional[str] = None
+    video: Optional[bool] = False
+
+
 
 # Motor del modelo
 sqlite_file_name = "album.db"
@@ -256,7 +272,7 @@ def create_user(user: Usercreate, session: SessionDep):
     else:
         return {"message": f"El usuario {user.username} ya existe en la BBDD"}
 
-# Borrar un usuario. PENDIENTE DE IMPLEMENTAR
+# Borrar un usuario. 
 @app.delete("/delete_user/{username}")
 def delete_user(username: str, session: SessionDep):
     user_query = select(Users).where(Users.username == username)
@@ -268,6 +284,23 @@ def delete_user(username: str, session: SessionDep):
         session.delete(registry)
         session.commit()
         return {"message": f"El usuario {username} se ha borrado satisfactoriamente"}
+    
+# Actualizar un usuario.
+@app.patch("/users/update/{username}")
+async def update_row(session: SessionDep, body: Userbase, username: str):
+    users_query = select(Users).where(Users.username == username)
+    result = session.exec(users_query)
+    registry = result.first()
+    if not registry:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    else:
+        user = body.model_dump(exclude_unset=True)    
+        registry.sqlmodel_update(user)
+
+        session.add(registry)
+        session.commit()
+        session.refresh(registry)
+        return registry
 
 # FIN USERS ===============================================================================
 
@@ -374,6 +407,46 @@ async def delete_file(session: SessionDep, filename: str):
 
     
     return {"message": f"Archivo '{filename}' borrado correctamente"}
+
+
+# Actualizar una foto
+@app.patch("/fotos/update/{filename}")
+async def update_row_foto(session: SessionDep, body: FotoUpdate, filename: str):
+
+
+    foto_query = select(Foto).where(Foto.file == filename)
+    result = session.exec(foto_query)
+    registry = result.first()
+    if not registry:
+        raise HTTPException(status_code=404, detail="Foto no encontrada")
+    else:
+        foto = body.model_dump(exclude_unset=True)  
+        registry.sqlmodel_update(foto)
+        session.add(registry)
+        session.commit()
+        session.refresh(registry)
+        return registry
+    
+
+# Actualizar un usuario
+@app.patch("/users/update/{username}")
+async def update_row_user(session: SessionDep, body: UsersUpdate, username:str):
+    user_query = select(Users).where(Users.username == username)
+    result = session.exec(user_query)
+    registry = result.first()
+    if not registry:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    else:
+        user = body.model_dump(exclude_unset=True, exclude={"password"})
+       # if body.password != None:
+        #    h_password = get_password_hash(body.password)
+         #   db_user = Users(**user, hashed_password=h_password)
+
+        registry.sqlmodel_update(user)
+        session.add(registry)
+        session.commit()
+        session.refresh(registry)
+        return registry
 
 # FIN FOTOS  ===============================================================================
  
