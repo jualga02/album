@@ -287,7 +287,7 @@ def delete_user(username: str, session: SessionDep):
     
 # Actualizar un usuario.
 @app.patch("/users/update/{username}")
-async def update_row(session: SessionDep, body: Userbase, username: str):
+async def update_row(session: SessionDep, body: UsersUpdate, username: str):
     users_query = select(Users).where(Users.username == username)
     result = session.exec(users_query)
     registry = result.first()
