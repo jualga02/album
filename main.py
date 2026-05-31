@@ -5,7 +5,7 @@ from pwdlib import PasswordHash
 from datetime import date, datetime, timedelta, timezone
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Path, Query, UploadFile, status
 from typing import Annotated, Optional
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm, HTTPBearer, HTTPAuthorizationCredentials
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from pathlib import Path
 from pydantic import BaseModel
@@ -36,6 +36,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 DOWNLOAD_DIR = "http://localhost:8000/static/"
 UPLOAD_DIR = Path("./fotos")
 # UPLOAD_DIR.mkdir(exist_ok=True) crea la carpeta si no existe
+security = HTTPBearer()
 
 # Montar una carpeta para servir archivos estáticos
 # Ahora puedes acceder a la foto en: /static/nombre_de_la_foto.jpg
@@ -140,6 +141,8 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 300
 class Token(BaseModel):
     access_token: str
     token_type: str
+    user_logged: str
+    user_id: int
 
 class TokenData(BaseModel):
     username: str | None = None    
@@ -228,7 +231,7 @@ async def login_for_access_token(
     access_token = create_access_token(
         data={"sub": user.username}, expires_delta=access_token_expires
     )
-    return Token(access_token=access_token, token_type="bearer")
+    return Token(access_token=access_token, token_type="bearer",user_logged=form_data.username, user_id=user.id)
 
 
 
@@ -249,6 +252,12 @@ async def read_own_items(
 
 
 # RUTAS TABLA USERS ====================================================================
+def get_current_user_from_token(credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)]):
+    token = credentials.credentials
+    # AQUÍ DEBES VALIDAR TU JWT TOKEN (ej. con python-jose o PyJWT)
+    # Si el token no es válido, lanza una excepción:
+    # raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido")
+    return token # O retorna los datos del usuario decodificados
 
 # Crear un nuevo usuario. 
 @app.post("/new_user/")
@@ -302,11 +311,24 @@ async def update_row(session: SessionDep, body: UsersUpdate, username: str):
         session.refresh(registry)
         return registry
 
+# Obtener todos los usuarios.
+@app.get("/users/all")
+def read_fotos(
+    session: SessionDep,
+    token: Annotated[str, Depends(get_current_user_from_token)],
+    offset: int = 0,
+    limit: Annotated[int, Query(le=100)] = 100,
+)-> list[Users]:
+    photoUsers= session.exec(select(Users).offset(offset).limit(limit)).all()
+    return photoUsers
+
 # FIN USERS ===============================================================================
 
 
 
 # RUTAS TABLA FOTOS =======================================================================
+
+
 
 
 # Crear una foto. 
@@ -360,13 +382,33 @@ async def create_foto(
 
 
 # Devolver todos los registros
-@app.get("/fotos/")
+@app.get("/fotos/all")
 def read_fotos(
     session: SessionDep,
+    token: Annotated[str, Depends(get_current_user_from_token)],
     offset: int = 0,
     limit: Annotated[int, Query(le=100)] = 100,
 )-> list[Foto]:
     fotos = session.exec(select(Foto).offset(offset).limit(limit)).all()
+    return fotos
+
+# Devolver todos los registros de un usuario
+@app.get("/fotos/only/{user}")
+def read_fotos(
+    session: SessionDep,
+    token: Annotated[str, Depends(get_current_user_from_token)],
+    user: str,
+    offset: int = 0,
+    limit: Annotated[int, Query(le=100)] = 100,
+)-> list[Foto]:
+    statement = (
+        select(Foto)
+        .join(Users, Foto.user_id == Users.id)
+        .where(Users.username == user)
+        .offset(offset)
+        .limit(limit)
+    )
+    fotos = session.exec(statement).all()
     return fotos
 
 # Devolver un registro
@@ -379,7 +421,7 @@ def read_foto(id: int, session: SessionDep) -> Foto:
 
 
 # Borrar un archivo. 
-@app.delete("/fotos/{filename}")
+@app.delete("/fotos/delete/{filename}")
 async def delete_file(session: SessionDep, filename: str):
     # Borrado del registro en la BBDD
     foto_query = select(Foto).where(Foto.file == filename)
