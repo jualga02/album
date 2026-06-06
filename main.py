@@ -84,6 +84,8 @@ class Foto(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     #Este campo debe ser añadido de forma automática
     file: str | None = Field(index=True)
+    #Alias para 'file' que se mostrará al usuario en el frontend como opcional. Por defecto será el mismo valor que 'file'
+    title: str | None = Field(index=True)
     #Oculto al usuario. Deberá reprogramarse en producción
     url: str | None
     comment: str | None 
@@ -101,6 +103,7 @@ class Foto(SQLModel, table=True):
     
 # Clase para actualizaciones de usuario de la tabla Foto
 class FotoUpdate(BaseModel):
+    title: Optional[str] = None
     comment: Optional[str] = None
     shot_date: Optional[date] = None
     tag: Optional[str] = None
@@ -344,7 +347,8 @@ def create_foto(
         token: Annotated[str, Depends(get_current_user_from_token)],
         shot_date: Annotated[str | None, Form()] = None,
         comment:  Annotated[str | None, Form()] = None,
-        tag: Annotated[str | None, Form()] = None
+        tag: Annotated[str | None, Form()] = None,
+        title: Annotated[str | None, Form()] = None
     ):
 
     foto_query = select(Foto).where(Foto.file == file.filename)
@@ -352,9 +356,10 @@ def create_foto(
     registry = result.first()
     if not registry:
         foto = Foto()
-        foto.comment = comment
+        foto.comment = comment        
         foto.id = None
         foto.file = file.filename
+        foto.title = title if title else foto.file
         foto.url = f"{DOWNLOAD_DIR}{foto.file}"
         foto.user_id = user_id
         foto.tag = tag
@@ -391,7 +396,8 @@ def create_foto(
             "data": {
                 "id": foto.id,
                 "url": foto.url,
-                "file": foto.file
+                "file": foto.file,
+                "title": foto.title,
             }
         }
     else:
