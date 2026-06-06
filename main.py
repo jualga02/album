@@ -82,7 +82,7 @@ class UsersUpdate(BaseModel):
 class Foto(SQLModel, table=True):
     #Este campo estará oculto al usuario en el frontend
     id: int | None = Field(default=None, primary_key=True)
-    #Este campo debe ser oculto tambien y añadido de forma automática
+    #Este campo debe ser añadido de forma automática
     file: str | None = Field(index=True)
     #Oculto al usuario. Deberá reprogramarse en producción
     url: str | None
@@ -93,7 +93,9 @@ class Foto(SQLModel, table=True):
     #Este campo estará oculto al usuario en el frontend
     up_date: date | None = Field(default_factory=date.today, index=True)
     # shot_date puede ser 'null' o un tipo string fecha: "yyyy-mm-dd"
-    shot_date: date | None = Field(default_factory=date.today, index=True)
+    # registro inicial (hasta 04-06-2026)
+    #shot_date: date | None = Field(default_factory=date.today, index=True)
+    shot_date: Optional[date] = Field(default=None, nullable=True)
     tag: str | None = Field(index=True)
     video: bool | None = Field(index=True)
     
@@ -333,14 +335,17 @@ def read_fotos(
 
 # Crear una foto. 
 @app.post("/new_foto/")
-async def create_foto(
-        shot_date: Annotated[str, Form()],
-        comment: Annotated[str, Form()],
-        tag: Annotated[str, Form()],
+def create_foto(
+          
         file: Annotated[UploadFile, File()],
         video: Annotated[bool, Form()],
+        user_id: Annotated[str, Form()],
         session: SessionDep, 
-    )-> dict | Foto:
+        token: Annotated[str, Depends(get_current_user_from_token)],
+        shot_date: Annotated[str | None, Form()] = None,
+        comment:  Annotated[str | None, Form()] = None,
+        tag: Annotated[str | None, Form()] = None
+    ):
 
     foto_query = select(Foto).where(Foto.file == file.filename)
     result = session.exec(foto_query)
@@ -351,14 +356,19 @@ async def create_foto(
         foto.id = None
         foto.file = file.filename
         foto.url = f"{DOWNLOAD_DIR}{foto.file}"
-        foto.user_id = 0
-        # "2025-01-01"
-        foto.shot_date =  shot_date         
+        foto.user_id = user_id
         foto.tag = tag
         foto.video = video
+        # "2025-01-01"
+        #foto.shot_date =  shot_date      
+        if shot_date and shot_date.strip():
+            foto.shot_date = date.fromisoformat(shot_date.strip())
+        else:
+            foto.shot_date = None
+        
         # Corrección del tipo Date para la BBDD
-        if foto.shot_date != None:
-            foto.shot_date = date.fromisoformat(foto.shot_date)
+        #if foto.shot_date != None:
+        #   foto.shot_date = date.fromisoformat(foto.shot_date)
 
         # Subida del archivo
         #Construye la ruta con el nombre original del archivo
@@ -374,9 +384,24 @@ async def create_foto(
         session.add(foto)
         session.commit()
         session.refresh(foto)
-        return foto
+        # RETORNO EXITOSO: Enviamos un mensaje explícito legible por el Frontend
+        return {
+            "status": "success",
+            "message": f"El archivo {file.filename} se ha guardado con éxito",
+            "data": {
+                "id": foto.id,
+                "url": foto.url,
+                "file": foto.file
+            }
+        }
     else:
-        return {"message": f"El archivo {file.filename} ya se encuentra en la BBDD"}
+        #Respuesta inicial
+        #return {"message": f"El archivo {file.filename} ya se encuentra en la BBDD"}
+        #Respuesta recomendada
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"El archivo {file.filename} ya se encuentra en la BBDD"
+        )
 
 
 
