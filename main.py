@@ -450,6 +450,41 @@ def read_foto(id: int, session: SessionDep) -> Foto:
         raise HTTPException(status_code=404, detail="Foto no encontrada")
     return foto
 
+# Devolver todos los registros que contengan una cadena específica en el campo 'title'
+@app.get("/fotos/search_title/{title_str}")
+def search_fotos_by_title(
+    session: SessionDep,
+    token: Annotated[str, Depends(get_current_user_from_token)],
+    title_str: str,
+    offset: int = 0,
+    limit: Annotated[int, Query(le=100)] = 100
+) -> list[Foto]:
+    statement = (
+        select(Foto)
+        .where(Foto.title.contains(title_str))
+        .offset(offset)
+        .limit(limit)
+    )
+    fotos = session.exec(statement).all()
+    return fotos
+
+# Devolver todos los registros que contengan una cadena específica en el campo 'tag'
+@app.get("/fotos/search_tag/{tag_str}")
+def search_fotos_by_tag(
+    session: SessionDep,
+    token: Annotated[str, Depends(get_current_user_from_token)],
+    tag_str: str,
+    offset: int = 0,
+    limit: Annotated[int, Query(le=100)] = 100
+) -> list[Foto]:
+    statement = (
+        select(Foto)
+        .where(Foto.tag.contains(tag_str))
+        .offset(offset)
+        .limit(limit)
+    )
+    fotos = session.exec(statement).all()
+    return fotos
 
 # Borrar un archivo. 
 @app.delete("/fotos/delete/{filename}")
