@@ -488,7 +488,11 @@ def search_fotos_by_tag(
 
 # Borrar un archivo. 
 @app.delete("/fotos/delete/{filename}")
-async def delete_file(session: SessionDep, filename: str):
+async def delete_file(
+    session: SessionDep, 
+    token: Annotated[str, Depends(get_current_user_from_token)], 
+    filename: str
+    ):
     # Borrado del registro en la BBDD
     foto_query = select(Foto).where(Foto.file == filename)
     result = session.exec(foto_query)
@@ -498,19 +502,19 @@ async def delete_file(session: SessionDep, filename: str):
     session.delete(registry)
     session.commit()
 
-    # Construïm la ruta completa del fitxer
+    # Construimos la ruta del archivo a borrar
     file_path = UPLOAD_DIR / filename
     
-    # 1. Verifiquem si el fitxer existeix realment
+    # Verificamos si el archivo existe antes de borrarlo
     if not file_path.exists():
-        raise HTTPException(status_code=404, detail="El fitxer no existeix")
+        raise HTTPException(status_code=404, detail="El archivo no existe")
     
     try:
         # 2. Esborrem el fitxer de forma permanent
         file_path.unlink()
         
     except Exception as e:
-        # Per si hi ha problemes de permisos o el fitxer està en ús
+        # Por si hay problemas de permisos o el archivo está siendo usado por otro proceso, etc.
         raise HTTPException(status_code=500, detail=f"Error al borrar: {str(e)}")
 
     
