@@ -519,7 +519,12 @@ async def delete_file(session: SessionDep, filename: str):
 
 # Actualizar una foto
 @app.patch("/fotos/update/{filename}")
-async def update_row_foto(session: SessionDep, body: FotoUpdate, filename: str):
+async def update_row_foto(
+    session: SessionDep, 
+    token: Annotated[str, Depends(get_current_user_from_token)], 
+    body: FotoUpdate, 
+    filename: str
+    ):
 
 
     foto_query = select(Foto).where(Foto.file == filename)
