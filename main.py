@@ -20,13 +20,16 @@ origins = [
     "http://localhost.tiangolo.com",
     "https://localhost.tiangolo.com",
     "http://localhost",
+    "http://127.0.0.1",
     "http://localhost:8080",
-    "http://localhost:4200"
+    "http://localhost:4200",
+    "http://127.0.0.1:4200",
 ]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -266,7 +269,10 @@ def get_current_user_from_token(credentials: Annotated[HTTPAuthorizationCredenti
 
 # Crear un nuevo usuario. 
 @app.post("/new_user/")
-def create_user(user: Usercreate, session: SessionDep):
+def create_user(
+    user: Usercreate, 
+    session: SessionDep
+    ):
     #Comprobamos que el nombre de usuario no exista en la BBDD
     user_query = select(Users).where(Users.username == user.username)
     result = session.exec(user_query)
