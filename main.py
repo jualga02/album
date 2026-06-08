@@ -11,6 +11,8 @@ from pathlib import Path
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 # Usar Jinja2 como motor de plantillas
 
@@ -61,7 +63,7 @@ class Userid(SQLModel):
 # Base común
 class Userbase(Userid):
     username: str | None = Field(index=True, unique=True)
-    email: str | None
+    email: str | None = Field(index=True, unique=True)
     full_name: str | None
 
 # Datos del usuario
@@ -131,6 +133,9 @@ SessionDep = Annotated[Session, Depends(get_session)]
 @app.on_event("startup")
 def create_db_and_tables():
     SQLModel.metadata.create_all(engine)
+    with engine.begin() as connection:
+        connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_users_username ON users (username)"))
+        connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_users_email ON users (email)"))
 
 
 # Ruta inicial
@@ -187,6 +192,17 @@ def authenticate_user(session: SessionDep, username: str, password: str ):
     return user
 
 
+def authenticate_user_by_email(session: SessionDep, email: str, password: str):
+    user_query = select(Users).where(Users.email == email)
+    user = session.exec(user_query).first()
+    if not user:
+        verify_password(password, DUMMY_HASH)
+        return False
+    if not verify_password(password, user.hashed_password):
+        return False
+    return user
+
+
 def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode = data.copy()
     if expires_delta:
@@ -228,18 +244,18 @@ async def get_current_active_user(current_user: Annotated[Users, Depends(get_cur
 @app.post("/token")
 async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()], session: SessionDep) -> Token:
-    user = authenticate_user(session, form_data.username, form_data.password)
+    user = authenticate_user_by_email(session, form_data.username, form_data.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+            detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"}
         )
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": user.username}, expires_delta=access_token_expires
     )
-    return Token(access_token=access_token, token_type="bearer",user_logged=form_data.username, user_id=user.id)
+    return Token(access_token=access_token, token_type="bearer",user_logged=user.username or form_data.username, user_id=user.id)
 
 
 
@@ -273,8 +289,10 @@ def create_user(
     user: Usercreate, 
     session: SessionDep
     ):
-    #Comprobamos que el nombre de usuario no exista en la BBDD
-    user_query = select(Users).where(Users.username == user.username)
+    #Comprobamos que el nombre de usuario y el email no existan en la BBDD
+    user_query = select(Users).where(
+        (Users.username == user.username) | (Users.email == user.email)
+    )
     result = session.exec(user_query)
     registry = result.first()
     if not registry:
@@ -284,13 +302,23 @@ def create_user(
         extra_data = user.model_dump(exclude={"password"})
         db_user = Users(**extra_data, hashed_password=h_password)
 
-        session.add(db_user)
-        session.commit()
-        session.refresh(db_user)
-        return {"message": "usuario creado para ","name": db_user.full_name }
+        try:
+            session.add(db_user)
+            session.commit()
+            session.refresh(db_user)
+            return {"message": "usuario creado para ","name": db_user.full_name }
+        except IntegrityError:
+            session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="El username o el email ya existen en la BBDD"
+            )
     
     else:
-        return {"message": f"El usuario {user.username} ya existe en la BBDD"}
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="El username o el email ya existen en la BBDD"
+        )
 
 # Borrar un usuario. 
 @app.delete("/delete_user/{username}")
