@@ -6,13 +6,19 @@ from datetime import date, datetime, timedelta, timezone
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Path, Query, UploadFile, status
 from typing import Annotated, Optional
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm, HTTPBearer, HTTPAuthorizationCredentials
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from pathlib import Path
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
+from fastapi_mail import FastMail, MessageSchema, MessageType, ConnectionConfig
+from fastapi.templating import Jinja2Templates
+from email.mime.image import MIMEImage
+import traceback   
+from fastapi.responses import HTMLResponse 
 
 # Usar Jinja2 como motor de plantillas
 
@@ -47,8 +53,45 @@ security = HTTPBearer()
 # Ahora puedes acceder a la foto en: /static/nombre_de_la_foto.jpg
 app.mount("/static", StaticFiles(directory="fotos"), name="static")
 
-    
+#=================> CONFIGURACIÓN DE FASTAPI-MAIL <=================
 
+# 1. Definir el modelo de configuración que lee el archivo .env
+class Settings(BaseSettings):
+    MAIL_USERNAME: str
+    MAIL_PASSWORD: str
+    MAIL_FROM: EmailStr
+    MAIL_PORT: int
+    MAIL_SERVER: str
+    MAIL_STARTTLS: bool
+    MAIL_SSL_TLS: bool
+    USE_CREDENTIALS: bool
+    MAIL_FROM_NAME: str
+
+    # Indicar a Pydantic que busque el archivo .env
+    model_config = SettingsConfigDict(env_file=".env")
+
+# 2. Cargar las variables de entorno
+settings = Settings()
+
+# 3. Pasar las variables a la configuración de fastapi-mail
+conf = ConnectionConfig(
+    MAIL_USERNAME=settings.MAIL_USERNAME,
+    MAIL_PASSWORD=settings.MAIL_PASSWORD,
+    MAIL_FROM=settings.MAIL_FROM,
+    MAIL_PORT=settings.MAIL_PORT,
+    MAIL_SERVER=settings.MAIL_SERVER,
+    MAIL_FROM_NAME=settings.MAIL_FROM_NAME,
+    MAIL_STARTTLS=True,           # Usar TLS para puerto 587
+    MAIL_SSL_TLS=False,
+    USE_CREDENTIALS=True,
+    VALIDATE_CERTS=True
+)
+
+# 4. Instanciar FastMail
+fm = FastMail(conf)  
+
+templates = Jinja2Templates(directory="templates")
+#=================> FIN CONFIGURACIÓN DE FASTAPI-MAIL <=================
 
 #Clase Users. Implementa la seguridad.
 '''Para que el campo contraseña no aparezca en la bbdd y el dato 'id' no 
@@ -73,7 +116,8 @@ class Usercreate(Userbase):
 # Tabla para la bbdd
 class Users(Userbase, table=True):    
     hashed_password: str | None = Field(index=True)
-    disable: bool | None = Field(index=True, default=False)    
+    disable: bool | None = Field(index=True, default=True)    
+    isVerified: bool | None = Field(index=True, default=False)
     rol: str | None = Field(default='user')
 
 # Tabla para actualizaciones de usuario en la tabla Users
@@ -195,11 +239,23 @@ def authenticate_user(session: SessionDep, username: str, password: str ):
 def authenticate_user_by_email(session: SessionDep, email: str, password: str):
     user_query = select(Users).where(Users.email == email)
     user = session.exec(user_query).first()
+    
     if not user:
         verify_password(password, DUMMY_HASH)
         return False
+    
     if not verify_password(password, user.hashed_password):
         return False
+    
+    # NUEVA VALIDACIÓN: Comprobar que el usuario está verificado Y activado
+    if not user.isVerified:
+        print(f"⚠️ Usuario {email} no ha verificado su cuenta aún")
+        return False
+    
+    if user.disable:
+        print(f"⚠️ Usuario {email} no ha sido habilitado todavía por el administrador")
+        return False
+    
     return user
 
 
@@ -240,7 +296,8 @@ async def get_current_active_user(current_user: Annotated[Users, Depends(get_cur
 
 
 
-# Autentica a un usuario, el cual, debe haberse registrado previamente.
+# Autentica a un usuario, el cual, debe haberse registrado previamente, verifcado su email
+# y ser habilitada su cuenta por el administrador (disabled = 0).
 @app.post("/token")
 async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()], session: SessionDep) -> Token:
@@ -273,6 +330,207 @@ async def read_own_items(
 
 
 # END SECURITY CODE ====================================================================
+# =========================< ENVÍO DE EMAILS >===============================================
+
+#import traceback # Asegúrate de tener este import al inicio del archivo si no lo tienes
+
+async def send_welcome_email(user_email: str, username: str, full_name: str):
+    """Envía un email de bienvenida al nuevo usuario (sin adjuntos)."""
+    try:
+        validation_url = "http://localhost:8000/verify-account"
+        
+        # Renderizar plantilla HTML
+        html_content = templates.get_template("email_bienvenida.html").render({
+            "username": username,
+            "full_name": full_name,
+            "user_email": user_email,
+            "validation_url": validation_url
+        })
+        
+        # Crear el mensaje SIN el parámetro 'attachments'
+        message = MessageSchema(
+            subject="¡Bienvenido/a a Álbum! - Tu cuenta ha sido creada",
+            recipients=[user_email],
+            body=html_content,
+            subtype=MessageType.html
+        )
+        
+        await fm.send_message(message)
+        print(f"✅ EMAIL ENVIADO EXITOSAMENTE a: {user_email}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ ERROR CRÍTICO al enviar email: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return False
+    
+
+
+
+@app.get("/verify-account", response_class=HTMLResponse)
+async def verify_user_account(username: str, email: str, session: SessionDep):
+    """
+    Ruta activada por el botón 'Validar mi cuenta' del email de bienvenida.
+    1. Marca al usuario como verificado (isVerified = True)
+    2. Envía un email al administrador para que active la cuenta manualmente
+    """
+    try:
+        # Buscar al usuario
+        user_query = select(Users).where(Users.username == username, Users.email == email)
+        result = session.exec(user_query)
+        user = result.first()
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
+        
+        # Marcar como verificado
+        user.isVerified = True
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+        print(f"✅ Usuario {username} marcado como verificado (isVerified=True)")
+        
+        # Enviar email al administrador
+        admin_email = "clinton002@msn.com"
+        admin_subject = f"Nueva cuenta pendiente de activación: {user.full_name}"
+        admin_body = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; padding: 20px;">
+            <h2 style="color: #2c3e50;">🔔 Nueva cuenta pendiente de activación</h2>
+            <p>Un nuevo usuario ha verificado su cuenta y está esperando tu aprobación:</p>
+            
+            <table style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <tr>
+                    <td style="font-weight: bold; padding: 8px 0;">Nombre completo:</td>
+                    <td style="padding: 8px 0;">{user.full_name}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: bold; padding: 8px 0;">Usuario:</td>
+                    <td style="padding: 8px 0;">{user.username}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: bold; padding: 8px 0;">Email:</td>
+                    <td style="padding: 8px 0;">{user.email}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: bold; padding: 8px 0;">Estado actual:</td>
+                    <td style="padding: 8px 0; color: #f59e0b;">⚠️ Desactivado (disable=True)</td>
+                </tr>
+            </table>
+            
+            <p><strong>Acción requerida:</strong> Accede al panel de administración y cambia el campo <code>disable</code> a <code>False</code> para activar esta cuenta.</p>
+            
+            <hr style="border: none; border-top: 1px solid #e9ecef; margin: 30px 0;">
+            <p style="color: #6c757d; font-size: 12px;">
+                Este es un mensaje automático del sistema Álbum.
+            </p>
+        </body>
+        </html>
+        """
+        
+        message = MessageSchema(
+            subject=admin_subject,
+            recipients=[admin_email],
+            body=admin_body,
+            subtype=MessageType.html
+        )
+        
+        await fm.send_message(message)
+        print(f"✅ Email de notificación enviado al administrador: {admin_email}")
+        
+        # Devolver página HTML amigable al usuario
+        html_response = f"""
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Cuenta Verificada - Álbum</title>
+            <style>
+                body {{
+                    font-family: Arial, sans-serif;
+                    background-color: #f4f6f8;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    height: 100vh;
+                    margin: 0;
+                }}
+                .card {{
+                    background: white;
+                    padding: 40px;
+                    border-radius: 12px;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                    text-align: center;
+                    max-width: 500px;
+                }}
+                .icon {{
+                    font-size: 64px;
+                    margin-bottom: 20px;
+                }}
+                h2 {{
+                    color: #2c3e50;
+                    margin-bottom: 15px;
+                }}
+                p {{
+                    color: #555;
+                    line-height: 1.6;
+                    margin-bottom: 20px;
+                }}
+                .status {{
+                    background-color: #fff8e1;
+                    border-left: 4px solid #ffc107;
+                    padding: 15px;
+                    margin: 20px 0;
+                    text-align: left;
+                    border-radius: 6px;
+                }}
+                .btn {{
+                    display: inline-block;
+                    margin-top: 20px;
+                    padding: 12px 30px;
+                    background-color: #3498db;
+                    color: white;
+                    text-decoration: none;
+                    border-radius: 6px;
+                    font-weight: bold;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="card">
+                <div class="icon">✅</div>
+                <h2>¡Cuenta Verificada!</h2>
+                <p>Hola <strong>{user.full_name or username}</strong>,</p>
+                <p>Tu identidad ha sido confirmada correctamente.</p>
+                
+                <div class="status">
+                    <p style="margin: 0; color: #856404;">
+                        <strong>⚠️ Pendiente de activación final</strong><br>
+                        Hemos notificado al administrador. En cuanto revise y active tu cuenta, 
+                        recibirás un correo de confirmación y ya podrás iniciar sesión.
+                    </p>
+                </div>
+                
+                <p style="font-size: 14px; color: #6c757d;">
+                    Usuario: <strong>{username}</strong><br>
+                    Email: <strong>{email}</strong>
+                </p>
+                
+                <a href="http://localhost:4200" class="btn">Volver a la aplicación</a>
+            </div>
+        </body>
+        </html>
+        """
+        
+        return html_response
+        
+    except Exception as e:
+        print(f"❌ Error al verificar cuenta: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error al verificar la cuenta: {str(e)}")
 
 
 # RUTAS TABLA USERS ====================================================================
@@ -285,35 +543,43 @@ def get_current_user_from_token(credentials: Annotated[HTTPAuthorizationCredenti
 
 # Crear un nuevo usuario. 
 @app.post("/new_user/")
-def create_user(
-    user: Usercreate, 
-    session: SessionDep
-    ):
-    #Comprobamos que el nombre de usuario y el email no existan en la BBDD
+async def create_user(user: Usercreate, session: SessionDep):
+    # Comprobamos que el usuario no exista
     user_query = select(Users).where(
         (Users.username == user.username) | (Users.email == user.email)
     )
     result = session.exec(user_query)
     registry = result.first()
+    
     if not registry:
-
         h_password = get_password_hash(user.password)
-
         extra_data = user.model_dump(exclude={"password"})
         db_user = Users(**extra_data, hashed_password=h_password)
-
+        
         try:
             session.add(db_user)
             session.commit()
             session.refresh(db_user)
-            return {"message": "usuario creado para ","name": db_user.full_name }
+            
+            # ====== NUEVO: ENVIAR EMAIL ======
+            email_sent = await send_welcome_email(
+                user_email=db_user.email,
+                username=db_user.username,
+                full_name=db_user.full_name
+            )
+            
+            return {
+                "message": "Usuario creado correctamente",
+                "name": db_user.full_name,
+                "email_sent": email_sent
+            }
+            
         except IntegrityError:
             session.rollback()
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="El username o el email ya existen en la BBDD"
             )
-    
     else:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -601,3 +867,15 @@ async def update_row_user(session: SessionDep, body: UsersUpdate, username:str):
 
 # FIN FOTOS  ===============================================================================
  
+# RUTAS DE ENVÍO DE CORREOS CON FASTAPI-MAIL ==================================================
+# Ejemplo de endpoint para enviar un correo
+@app.post("/send-email")
+async def send_email():
+    message = MessageSchema(
+        subject="Prueba desde FastAPI y Angular",
+        recipients=["clinton002@msn.com"],
+        body="Este es un correo de prueba usando variables de entorno.",
+        subtype=MessageType.plain
+    )
+    await fm.send_message(message)
+    return {"message": "Correo enviado con éxito"}
