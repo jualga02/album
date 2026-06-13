@@ -937,23 +937,31 @@ async def update_row_foto(
 
 # Actualizar un usuario
 @app.patch("/users/update/{username}")
-async def update_row_user(session: SessionDep, body: UsersUpdate, username:str):
+async def update_row_user(
+    session: SessionDep, 
+    current_user: Annotated[Users, Depends(get_current_user_from_token)],
+    body: UsersUpdate, 
+    username:str
+):
     user_query = select(Users).where(Users.username == username)
     result = session.exec(user_query)
     registry = result.first()
     if not registry:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     else:
-        user = body.model_dump(exclude_unset=True, exclude={"password"})
-       # if body.password != None:
-        #    h_password = get_password_hash(body.password)
-         #   db_user = Users(**user, hashed_password=h_password)
+        if registry.id != current_user.id:
+            raise HTTPException(status_code=403, detail="No tienes permiso para actualizar este usuario")
+        else:
+            user = body.model_dump(exclude_unset=True, exclude={"password"})
+            # if body.password != None:
+                #    h_password = get_password_hash(body.password)
+                #   db_user = Users(**user, hashed_password=h_password)
 
-        registry.sqlmodel_update(user)
-        session.add(registry)
-        session.commit()
-        session.refresh(registry)
-        return registry
+            registry.sqlmodel_update(user)
+            session.add(registry)
+            session.commit()
+            session.refresh(registry)
+            return registry
 
 # FIN FOTOS  ===============================================================================
  
