@@ -317,16 +317,7 @@ async def login_for_access_token(
 
 
 
-# MODIFICADO. Devuelve el nombre del usuario registrado para mostrarlo en la web
-@app.get("/users/me/")
-async def read_users_me(current_user: Annotated[Users, Depends(get_current_active_user)],) -> Users:
-    return current_user
 
-# MODIFICADO. Devuelve todos los datos del usuario registrado para mostrar el perfil en la web
-@app.get("/users/me/items/")
-async def read_own_items(
-    current_user: Annotated[Users, Depends(get_current_active_user)],):
-    return [{"item_id": "Foo", "owner": current_user.username}]
 
 
 # END SECURITY CODE ====================================================================
@@ -534,12 +525,43 @@ async def verify_user_account(username: str, email: str, session: SessionDep):
 
 
 # RUTAS TABLA USERS ====================================================================
-def get_current_user_from_token(credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)]):
+'''def get_current_user_from_token(credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)]):
     token = credentials.credentials
     # AQUÍ DEBES VALIDAR TU JWT TOKEN (ej. con python-jose o PyJWT)
     # Si el token no es válido, lanza una excepción:
     # raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido")
-    return token # O retorna los datos del usuario decodificados
+    return token # O retorna los datos del usuario decodificados'''
+
+def get_current_user_from_token(
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
+    session: SessionDep # Necesitamos la sesión para buscar en la BBDD
+):
+    token = credentials.credentials
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Token inválido o expirado",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    
+    try:
+        # 1. Decodificamos el token JWT usando tu SECRET_KEY y ALGORITHM
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+    except InvalidTokenError:
+        raise credentials_exception
+
+    # 2. Buscamos al usuario en la base de datos
+    user_query = select(Users).where(Users.username == username)
+    user = session.exec(user_query).first()
+
+    if user is None:
+        raise credentials_exception
+        
+    # 3. ¡CLAVE! Devolvemos el objeto Users completo, no el string
+    return user
+
 
 # Crear un nuevo usuario. 
 @app.post("/new_user/")
@@ -626,6 +648,32 @@ def read_fotos(
 )-> list[Users]:
     photoUsers= session.exec(select(Users).offset(offset).limit(limit)).all()
     return photoUsers
+
+
+# MODIFICADO. Devuelve el nombre del usuario registrado para mostrarlo en la web
+'''@app.get("/users/me/")
+async def read_users_me(current_user: Annotated[Users, Depends(get_current_active_user)],) -> Users:
+    return current_user'''
+
+# MODIFICADO. Devuelve todos los datos del usuario registrado para mostrar el perfil en la web
+@app.get("/users/me/items/")
+async def read_own_items(
+    session: SessionDep,
+    current_user: Annotated[Users, Depends(get_current_user_from_token)]
+):
+    user_query = select(Users).where(Users.id == current_user.id)
+    result = session.exec(user_query)
+    registry = result.first()
+
+    if not registry:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    
+    # 2. Control de propiedad (¡Crucial para la seguridad!)
+    # Evita que un usuario autenticado borre fotos de otro usuario
+    if registry.id != current_user.id:
+        raise HTTPException(status_code=403, detail="No tienes permiso para borrar esta foto")
+    
+    return current_user
 
 # FIN USERS ===============================================================================
 
@@ -787,10 +835,10 @@ def search_fotos_by_tag(
     return fotos
 
 # Borrar un archivo. 
-@app.delete("/fotos/delete/{filename}")
+'''@app.delete("/fotos/delete/{filename}")
 async def delete_file(
     session: SessionDep, 
-    token: Annotated[str, Depends(get_current_user_from_token)], 
+    current_user: Annotated[User, Depends(get_current_user_from_token)], 
     filename: str
     ):
     # Borrado del registro en la BBDD
@@ -817,6 +865,48 @@ async def delete_file(
         # Por si hay problemas de permisos o el archivo está siendo usado por otro proceso, etc.
         raise HTTPException(status_code=500, detail=f"Error al borrar: {str(e)}")
 
+    
+    return {"message": f"Archivo '{filename}' borrado correctamente"}'''
+
+# Borrar un archivo. 
+@app.delete("/fotos/delete/{filename}")
+async def delete_file(
+    session: SessionDep, 
+    # 1. Cambiamos 'str' por el modelo de tu usuario (ej. User) que devuelve tu dependencia
+    current_user: Annotated[Users, Depends(get_current_user_from_token)], 
+    filename: str
+):
+    # Selección del registro en la BBDD
+    foto_query = select(Foto).where(Foto.file == filename)
+    result = session.exec(foto_query)
+    registry = result.first()
+    
+    if not registry:
+        raise HTTPException(status_code=404, detail="Registro no encontrado")
+        
+    # 2. Control de propiedad (¡Crucial para la seguridad!)
+    # Evita que un usuario autenticado borre fotos de otro usuario
+    if registry.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="No tienes permiso para borrar esta foto")
+
+    # Construimos la ruta del archivo a borrar
+    file_path = UPLOAD_DIR / filename
+    
+    # Verificamos si el archivo existe antes de borrarlo de la BBDD
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="El archivo físico no existe")
+    
+    try:
+        # Borramos el fichero físico primero
+        file_path.unlink()
+        
+        # Si el archivo se borra bien, confirmamos el borrado en la BBDD
+        session.delete(registry)
+        session.commit()
+        
+    except Exception as e:
+        session.rollback()  # Deshace cambios si algo falla
+        raise HTTPException(status_code=500, detail=f"Error al borrar: {str(e)}")
     
     return {"message": f"Archivo '{filename}' borrado correctamente"}
 
