@@ -321,9 +321,10 @@ async def login_for_access_token(
 
 
 # END SECURITY CODE ====================================================================
-# =========================< ENVÍO DE EMAILS >===============================================
 
-#import traceback # Asegúrate de tener este import al inicio del archivo si no lo tienes
+# =========================< ENVÍO DE EMAILS >==========================================
+
+#import traceback. Asegúrate de tener este import al inicio del archivo si no lo tienes
 
 async def send_welcome_email(user_email: str, username: str, full_name: str):
     """Envía un email de bienvenida al nuevo usuario (sin adjuntos)."""
@@ -608,7 +609,7 @@ async def create_user(user: Usercreate, session: SessionDep):
             detail="El username o el email ya existen en la BBDD"
         )
 
-# Borrar un usuario. 
+# Borrar un usuario. Tarea exclusiva del administrador.
 @app.delete("/delete_user/{username}")
 def delete_user(username: str, session: SessionDep):
     user_query = select(Users).where(Users.username == username)
@@ -623,7 +624,12 @@ def delete_user(username: str, session: SessionDep):
     
 # Actualizar un usuario.
 @app.patch("/users/update/{username}")
-async def update_row(session: SessionDep, body: UsersUpdate, username: str):
+async def update_row(
+    session: SessionDep, 
+    current_user: Annotated[Users, Depends(get_current_user_from_token)],
+    body: UsersUpdate, 
+    username: str
+):
     users_query = select(Users).where(Users.username == username)
     result = session.exec(users_query)
     registry = result.first()
@@ -633,16 +639,19 @@ async def update_row(session: SessionDep, body: UsersUpdate, username: str):
         user = body.model_dump(exclude_unset=True)    
         registry.sqlmodel_update(user)
 
-        session.add(registry)
-        session.commit()
-        session.refresh(registry)
-        return registry
+        if username != current_user.username:
+            raise HTTPException(status_code=403, detail="No tienes permiso para actualizar este usuario")
+        else:
+            session.add(registry)
+            session.commit()
+            session.refresh(registry)
+            return registry
 
 # Obtener todos los usuarios.
 @app.get("/users/all")
-def read_fotos(
+def get_all_users(
     session: SessionDep,
-    token: Annotated[str, Depends(get_current_user_from_token)],
+    current_user: Annotated[Users, Depends(get_current_user_from_token)],
     offset: int = 0,
     limit: Annotated[int, Query(le=100)] = 100,
 )-> list[Users]:
@@ -650,7 +659,7 @@ def read_fotos(
     return photoUsers
 
 
-# MODIFICADO. Devuelve el nombre del usuario registrado para mostrarlo en la web
+# NO SE UTILIZARÁ. Devuelve el nombre del usuario registrado para mostrarlo en la web
 '''@app.get("/users/me/")
 async def read_users_me(current_user: Annotated[Users, Depends(get_current_active_user)],) -> Users:
     return current_user'''
@@ -692,7 +701,7 @@ def create_foto(
         video: Annotated[bool, Form()],
         user_id: Annotated[str, Form()],
         session: SessionDep, 
-        token: Annotated[str, Depends(get_current_user_from_token)],
+        current_user: Annotated[Users, Depends(get_current_user_from_token)],
         shot_date: Annotated[str | None, Form()] = None,
         comment:  Annotated[str | None, Form()] = None,
         tag: Annotated[str | None, Form()] = None,
@@ -702,60 +711,71 @@ def create_foto(
     foto_query = select(Foto).where(Foto.file == file.filename)
     result = session.exec(foto_query)
     registry = result.first()
-    if not registry:
-        foto = Foto()
-        foto.comment = comment        
-        foto.id = None
-        foto.file = file.filename
-        foto.title = title if title else foto.file
-        foto.url = f"{DOWNLOAD_DIR}{foto.file}"
-        foto.user_id = user_id
-        foto.tag = tag
-        foto.video = video
-        # "2025-01-01"
-        #foto.shot_date =  shot_date      
-        if shot_date and shot_date.strip():
-            foto.shot_date = date.fromisoformat(shot_date.strip())
-        else:
-            foto.shot_date = None
-        
-        # Corrección del tipo Date para la BBDD
-        #if foto.shot_date != None:
-        #   foto.shot_date = date.fromisoformat(foto.shot_date)
 
-        # Subida del archivo
-        #Construye la ruta con el nombre original del archivo
-        file_path = UPLOAD_DIR / foto.file
+    user_query = select(Users).where(Users.id == user_id)
+    user_result = session.exec(user_query)
+    user = user_result.first()
 
-        #Guarda el archivo en el disco
-        with open(file_path, "wb") as buffer:
-            #shutil copia eficientemente sin ocupar la RAM
-            shutil.copyfileobj(file.file, buffer)
-        #return {"info": f"Fichero guardado en: {file_path}", "filename": file.filename}
+    if current_user == user:
+        if not registry:
+            foto = Foto()
+            foto.comment = comment        
+            foto.id = None
+            foto.file = file.filename
+            foto.title = title if title else foto.file
+            foto.url = f"{DOWNLOAD_DIR}{foto.file}"
+            foto.user_id = user_id
+            foto.tag = tag
+            foto.video = video
+            # "2025-01-01"
+            #foto.shot_date =  shot_date      
+            if shot_date and shot_date.strip():
+                foto.shot_date = date.fromisoformat(shot_date.strip())
+            else:
+                foto.shot_date = None
+            
+            # Corrección del tipo Date para la BBDD
+            #if foto.shot_date != None:
+            #   foto.shot_date = date.fromisoformat(foto.shot_date)
 
-        # Añadido de datos a la BBDD
-        session.add(foto)
-        session.commit()
-        session.refresh(foto)
-        # RETORNO EXITOSO: Enviamos un mensaje explícito legible por el Frontend
-        return {
-            "status": "success",
-            "message": f"El archivo {file.filename} se ha guardado con éxito",
-            "data": {
-                "id": foto.id,
-                "url": foto.url,
-                "file": foto.file,
-                "title": foto.title,
+            # Subida del archivo
+            #Construye la ruta con el nombre original del archivo
+            file_path = UPLOAD_DIR / foto.file
+
+            #Guarda el archivo en el disco
+            with open(file_path, "wb") as buffer:
+                #shutil copia eficientemente sin ocupar la RAM
+                shutil.copyfileobj(file.file, buffer)
+            #return {"info": f"Fichero guardado en: {file_path}", "filename": file.filename}
+
+            # Añadido de datos a la BBDD
+            session.add(foto)
+            session.commit()
+            session.refresh(foto)
+            # RETORNO EXITOSO: Enviamos un mensaje explícito legible por el Frontend
+            return {
+                "status": "success",
+                "message": f"El archivo {file.filename} se ha guardado con éxito",
+                "data": {
+                    "id": foto.id,
+                    "url": foto.url,
+                    "file": foto.file,
+                    "title": foto.title,
+                }
             }
-        }
+        else:
+            #Respuesta inicial
+            #return {"message": f"El archivo {file.filename} ya se encuentra en la BBDD"}
+            #Respuesta recomendada
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"El archivo {file.filename} ya se encuentra en la BBDD"
+            )
     else:
-        #Respuesta inicial
-        #return {"message": f"El archivo {file.filename} ya se encuentra en la BBDD"}
-        #Respuesta recomendada
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"El archivo {file.filename} ya se encuentra en la BBDD"
-        )
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permiso para subir fotos para este usuario"
+        )    
 
 
 
@@ -764,7 +784,7 @@ def create_foto(
 @app.get("/fotos/all")
 def read_fotos(
     session: SessionDep,
-    token: Annotated[str, Depends(get_current_user_from_token)],
+    current_user: Annotated[Users, Depends(get_current_user_from_token)],
     offset: int = 0,
     limit: Annotated[int, Query(le=100)] = 100,
 )-> list[Foto]:
@@ -775,7 +795,7 @@ def read_fotos(
 @app.get("/fotos/only/{user}")
 def read_fotos(
     session: SessionDep,
-    token: Annotated[str, Depends(get_current_user_from_token)],
+    current_user: Annotated[Users, Depends(get_current_user_from_token)],
     user: str,
     offset: int = 0,
     limit: Annotated[int, Query(le=100)] = 100,
@@ -802,7 +822,7 @@ def read_foto(id: int, session: SessionDep) -> Foto:
 @app.get("/fotos/search_title/{title_str}")
 def search_fotos_by_title(
     session: SessionDep,
-    token: Annotated[str, Depends(get_current_user_from_token)],
+    current_user: Annotated[Users, Depends(get_current_user_from_token)],
     title_str: str,
     offset: int = 0,
     limit: Annotated[int, Query(le=100)] = 100
@@ -820,7 +840,7 @@ def search_fotos_by_title(
 @app.get("/fotos/search_tag/{tag_str}")
 def search_fotos_by_tag(
     session: SessionDep,
-    token: Annotated[str, Depends(get_current_user_from_token)],
+    current_user: Annotated[Users, Depends(get_current_user_from_token)],
     tag_str: str,
     offset: int = 0,
     limit: Annotated[int, Query(le=100)] = 100
@@ -834,39 +854,6 @@ def search_fotos_by_tag(
     fotos = session.exec(statement).all()
     return fotos
 
-# Borrar un archivo. 
-'''@app.delete("/fotos/delete/{filename}")
-async def delete_file(
-    session: SessionDep, 
-    current_user: Annotated[User, Depends(get_current_user_from_token)], 
-    filename: str
-    ):
-    # Borrado del registro en la BBDD
-    foto_query = select(Foto).where(Foto.file == filename)
-    result = session.exec(foto_query)
-    registry = result.first()
-    if not registry:
-        raise HTTPException(status_code=404, detail="Registro no encontrado")
-    session.delete(registry)
-    session.commit()
-
-    # Construimos la ruta del archivo a borrar
-    file_path = UPLOAD_DIR / filename
-    
-    # Verificamos si el archivo existe antes de borrarlo
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="El archivo no existe")
-    
-    try:
-        # 2. Esborrem el fitxer de forma permanent
-        file_path.unlink()
-        
-    except Exception as e:
-        # Por si hay problemas de permisos o el archivo está siendo usado por otro proceso, etc.
-        raise HTTPException(status_code=500, detail=f"Error al borrar: {str(e)}")
-
-    
-    return {"message": f"Archivo '{filename}' borrado correctamente"}'''
 
 # Borrar un archivo. 
 @app.delete("/fotos/delete/{filename}")
@@ -915,7 +902,7 @@ async def delete_file(
 @app.patch("/fotos/update/{filename}")
 async def update_row_foto(
     session: SessionDep, 
-    token: Annotated[str, Depends(get_current_user_from_token)], 
+    current_user: Annotated[Users, Depends(get_current_user_from_token)], 
     body: FotoUpdate, 
     filename: str
     ):
@@ -924,16 +911,26 @@ async def update_row_foto(
     foto_query = select(Foto).where(Foto.file == filename)
     result = session.exec(foto_query)
     registry = result.first()
-    if not registry:
-        raise HTTPException(status_code=404, detail="Foto no encontrada")
+
+    user_query = select(Users).where(Users.id == registry.user_id)
+    user_result = session.exec(user_query)
+    user = user_result.first()
+
+    if current_user == user:
+        if not registry:
+            raise HTTPException(status_code=404, detail="Foto no encontrada")
+        else:
+            foto = body.model_dump(exclude_unset=True)  
+            registry.sqlmodel_update(foto)
+            session.add(registry)
+            session.commit()
+            session.refresh(registry)
+            return registry
     else:
-        foto = body.model_dump(exclude_unset=True)  
-        registry.sqlmodel_update(foto)
-        session.add(registry)
-        session.commit()
-        session.refresh(registry)
-        return registry
-    
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permiso para actualizar esta foto"
+        )
 
 # Actualizar un usuario
 @app.patch("/users/update/{username}")
