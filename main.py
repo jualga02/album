@@ -974,3 +974,113 @@ async def send_email():
     )
     await fm.send_message(message)
     return {"message": "Correo enviado con éxito"}
+
+# ==============================================================================
+# RECUPERACIÓN DE CONTRASEÑA
+# ==============================================================================
+
+class PasswordRecoverRequest(BaseModel):
+    email: EmailStr
+
+class PasswordValidateRequest(BaseModel):
+    token: str
+    new_password: str
+
+@app.post("/token/pass/recover/")
+async def send_email_for_password(request: PasswordRecoverRequest, session: SessionDep):
+    """
+    1. Busca el email.
+    2. Si existe, genera un JWT de 30 min con propósito 'password_reset'.
+    3. Envía un correo con el enlace al frontend.
+    4. Siempre devuelve el mismo mensaje por seguridad (evita enumeración de emails).
+    """
+    user_query = select(Users).where(Users.email == request.email)
+    user = session.exec(user_query).first()
+    
+    # Mensaje genérico por seguridad
+    success_message = {"message": "Si el correo está registrado, recibirás un enlace de recuperación."}
+    
+    if not user:
+        return success_message
+
+    # Generar token con expiración de 30 minutos
+    reset_token_expires = timedelta(minutes=30)
+    reset_token = create_access_token(
+        data={"sub": user.email, "purpose": "password_reset"}, 
+        expires_delta=reset_token_expires
+    )
+    
+    # Enlace al frontend (ajusta el puerto si es necesario)
+    reset_link = f"http://localhost:4200/passrecover?token={reset_token}"
+    
+    html_content = f"""
+    <html>
+    <body style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+        <h2 style="color: #2c3e50;">🔒 Recuperación de Contraseña</h2>
+        <p>Hola {user.full_name or user.username},</p>
+        <p>Has solicitado restablecer tu contraseña en <strong>Álbum</strong>.</p>
+        <p>Haz clic en el siguiente botón para crear una nueva contraseña:</p>
+        <p style="margin: 30px 0;">
+            <a href="{reset_link}" style="background-color: #3498db; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Restablecer Contraseña</a>
+        </p>
+        <p style="color: #e74c3c; font-size: 14px;">⚠️ Este enlace expirará en 30 minutos por seguridad.</p>
+        <p style="color: #7f8c8d; font-size: 12px; margin-top: 40px;">Si no solicitaste este cambio, ignora este correo. Tu contraseña actual seguirá siendo válida.</p>
+    </body>
+    </html>
+    """
+    
+    message = MessageSchema(
+        subject="Recuperación de contraseña - Álbum",
+        recipients=[request.email],
+        body=html_content,
+        subtype=MessageType.html
+    )
+    
+    try:
+        await fm.send_message(message)
+        print(f"✅ Email de recuperación enviado a: {request.email}")
+        return success_message
+    except Exception as e:
+        print(f"❌ Error enviando email de recuperación: {e}")
+        # En producción, podrías querer registrar esto, pero devolvemos el mensaje genérico
+        return success_message
+
+
+@app.post("/token/pass/validate")
+async def validate_pass_token(request: PasswordValidateRequest, session: SessionDep):
+    """
+    1. Valida el token JWT.
+    2. Comprueba que el propósito sea 'password_reset'.
+    3. Actualiza la contraseña en la base de datos.
+    """
+    try:
+        # Decodificar token
+        payload = jwt.decode(request.token, SECRET_KEY, algorithms=[ALGORITHM])
+        
+        # Validar propósito del token
+        if payload.get("purpose") != "password_reset":
+            raise HTTPException(status_code=400, detail="Token no válido para esta operación")
+            
+        email = payload.get("sub")
+        if not email:
+            raise HTTPException(status_code=400, detail="Token inválido o corrupto")
+            
+        # Buscar usuario
+        user_query = select(Users).where(Users.email == email)
+        user = session.exec(user_query).first()
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
+            
+        # Actualizar contraseña (hasheada)
+        user.hashed_password = get_password_hash(request.new_password)
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+        
+        return {"message": "Contraseña actualizada correctamente. Ya puedes iniciar sesión."}
+        
+    except InvalidTokenError:
+        raise HTTPException(status_code=400, detail="El enlace ha expirado o no es válido. Solicita uno nuevo.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al actualizar la contraseña: {str(e)}")
