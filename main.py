@@ -1084,3 +1084,74 @@ async def validate_pass_token(request: PasswordValidateRequest, session: Session
         raise HTTPException(status_code=400, detail="El enlace ha expirado o no es válido. Solicita uno nuevo.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al actualizar la contraseña: {str(e)}")
+    
+
+#==================== Fin de recuperación de contraseña ==================================
+
+#===================< PANEL DE CONTROL DEL ADMINISTRADOR >========================================
+@app.get("/admin/get_user/{username}")
+def get_user_by_username(
+    username: str,
+    session: SessionDep,
+    current_user: Annotated[Users, Depends(get_current_user_from_token)],
+):
+    """
+    Devuelve los datos de un usuario específico por su nombre de usuario.
+    """
+    if current_user.rol != "admin":
+        raise HTTPException(status_code=403, detail="No tienes permisos de administrador")
+    
+    user_query = select(Users).where(Users.username == username)
+    result = session.exec(user_query)
+    user = result.first()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    
+    return user
+
+
+
+
+@app.get("/admin/disabled_users")
+def get_disabled_users(
+    session: SessionDep,
+    current_user: Annotated[Users, Depends(get_current_user_from_token)],
+):
+    """
+    Devuelve los usuarios deshabilitados.
+    """
+    if current_user.rol != "admin":
+        raise HTTPException(status_code=403, detail="No tienes permisos de administrador")
+    
+    request = select(Users).where(Users.disable == True)
+    result = session.exec(request)
+    disabled_users = result.all()
+    
+    return disabled_users
+
+@app.patch("/admin/enable_user/{username}")
+def enable_user(
+    username: str,
+    session: SessionDep,
+    current_user: Annotated[Users, Depends(get_current_user_from_token)],
+):
+    """
+    Habilita un usuario deshabilitado.
+    """
+    if current_user.rol != "admin":
+        raise HTTPException(status_code=403, detail="No tienes permisos de administrador")
+    
+    user_query = select(Users).where(Users.username == username)
+    result = session.exec(user_query)
+    user = result.first()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    
+    user.disable = False
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    
+    return {"message": f"Usuario {username} habilitado correctamente"}
