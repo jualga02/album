@@ -71,12 +71,16 @@ async def update_user(
     users_query = select(Users).where(Users.username == username)
     result = session.exec(users_query)
     registry = result.first()
+    
     if not registry:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    
     if username != current_user.username:
         raise HTTPException(status_code=403, detail="No tienes permiso para actualizar este usuario")
-    user = body.model_dump(exclude_unset=True, exclude={"password"})
-    registry.sqlmodel_update(user)
+    
+    # Excluir password del update (por seguridad)
+    user_data = body.model_dump(exclude_unset=True, exclude={"password"})
+    registry.sqlmodel_update(user_data)
     session.add(registry)
     session.commit()
     session.refresh(registry)
