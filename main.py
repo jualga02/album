@@ -19,14 +19,17 @@ from fastapi.templating import Jinja2Templates
 from email.mime.image import MIMEImage
 import traceback   
 from fastapi.responses import HTMLResponse 
+#==================< IMPORTACIONES DE ESTRUCTURACIÓN >=========================
 from app.models import Users, Foto, Usercreate
 from app.schemas import UsersUpdate, FotoUpdate, Token, TokenData, PasswordRecoverRequest, PasswordValidateRequest
-
+from app.config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES, DOWNLOAD_DIR, UPLOAD_DIR_NAME, origins, settings
+from app.database import engine, SessionDep, create_db_and_tables
+from pathlib import Path
 # Usar Jinja2 como motor de plantillas
 
 app = FastAPI()
 
-origins = [
+'''origins = [
     "http://localhost.tiangolo.com",
     "https://localhost.tiangolo.com",
     "http://localhost",
@@ -34,7 +37,7 @@ origins = [
     "http://localhost:8080",
     "http://localhost:4200",
     "http://127.0.0.1:4200",
-]
+]'''
 
 app.add_middleware(
     CORSMiddleware,
@@ -46,18 +49,20 @@ app.add_middleware(
 )
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-DOWNLOAD_DIR = "http://localhost:8000/static/"
-UPLOAD_DIR = Path("./fotos")
-# UPLOAD_DIR.mkdir(exist_ok=True) crea la carpeta si no existe
+'''DOWNLOAD_DIR = "http://localhost:8000/static/"
+UPLOAD_DIR = Path("./fotos")'''
+
+UPLOAD_DIR = Path(f"./{UPLOAD_DIR_NAME}")
+UPLOAD_DIR.mkdir(exist_ok=True) #crea la carpeta si no existe
 security = HTTPBearer()
 
 # Montar una carpeta para servir archivos estáticos
 # Ahora puedes acceder a la foto en: /static/nombre_de_la_foto.jpg
-app.mount("/static", StaticFiles(directory="fotos"), name="static")
+app.mount("/static", StaticFiles(directory=UPLOAD_DIR), name="static")
 
 #=================> CONFIGURACIÓN DE FASTAPI-MAIL <=================
 
-# 1. Definir el modelo de configuración que lee el archivo .env
+'''# 1. Definir el modelo de configuración que lee el archivo .env
 class Settings(BaseSettings):
     MAIL_USERNAME: str
     MAIL_PASSWORD: str
@@ -73,7 +78,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env")
 
 # 2. Cargar las variables de entorno
-settings = Settings()
+settings = Settings()'''
 
 # 3. Pasar las variables a la configuración de fastapi-mail
 conf = ConnectionConfig(
@@ -169,19 +174,23 @@ connect_args = {"check_same_thread": False}
 engine = create_engine(sqlite_url, connect_args=connect_args)
 
 # Sesión
-def get_session():
+'''def get_session():
     with Session(engine) as session:
         yield session
 
-SessionDep = Annotated[Session, Depends(get_session)]
+SessionDep = Annotated[Session, Depends(get_session)]'''
 
 # Creación de tablas y base de datos al arrancar
 @app.on_event("startup")
-def create_db_and_tables():
+def on_startup():
+    create_db_and_tables()
+
+
+'''def create_db_and_tables():
     SQLModel.metadata.create_all(engine)
     with engine.begin() as connection:
         connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_users_username ON users (username)"))
-        connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_users_email ON users (email)"))
+        connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_users_email ON users (email)"))'''
 
 
 # Ruta inicial
@@ -192,9 +201,9 @@ def read_root():
 # ====================================================================
 # Security
 # ====================================================================
-SECRET_KEY = "a2c315dfbbc06c5e8571a69e8ef67492860313627195b2e23c9eb0fd2f75d42b"
+'''SECRET_KEY = "a2c315dfbbc06c5e8571a69e8ef67492860313627195b2e23c9eb0fd2f75d42b"
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 300
+ACCESS_TOKEN_EXPIRE_MINUTES = 300'''
 
 # Clase Token
 '''class Token(BaseModel):
