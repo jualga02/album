@@ -1,57 +1,20 @@
 # app/routers/email.py
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import HTMLResponse
-from sqlmodel import select
 from fastapi_mail import MessageSchema, MessageType
 
 from app.database import SessionDep
-from app.models import Users
-from app.services.email_service import fm, templates
+from app.services.email_service import fm
+from app.services.user_service import verify_user_account
 
 router = APIRouter()
 
+
 @router.get("/verify-account", response_class=HTMLResponse)
-async def verify_user_account(username: str, email: str, session: SessionDep):
+async def verify_account(username: str, email: str, session: SessionDep):
     try:
-        user_query = select(Users).where(Users.username == username, Users.email == email)
-        result = session.exec(user_query)
-        user = result.first()
-
-        if not user:
-            raise HTTPException(status_code=404, detail="Usuario no encontrado")
-
-        user.isVerified = True
-        session.add(user)
-        session.commit()
-        session.refresh(user)
-        print(f"✅ Usuario {username} marcado como verificado (isVerified=True)")
-
-        admin_email = "clinton002@msn.com"
-        admin_subject = f"Nueva cuenta pendiente de activación: {user.full_name}"
-        admin_body = f"""
-        <html>
-        <body style="font-family: Arial, sans-serif; padding: 20px;">
-            <h2 style="color: #2c3e50;">🔔 Nueva cuenta pendiente de activación</h2>
-            <p>Un nuevo usuario ha verificado su cuenta y está esperando tu aprobación:</p>
-            <table style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                <tr><td style="font-weight: bold; padding: 8px 0;">Nombre completo:</td><td>{user.full_name}</td></tr>
-                <tr><td style="font-weight: bold; padding: 8px 0;">Usuario:</td><td>{user.username}</td></tr>
-                <tr><td style="font-weight: bold; padding: 8px 0;">Email:</td><td>{user.email}</td></tr>
-            </table>
-            <p><strong>Acción requerida:</strong> Accede al panel de administración y cambia el campo <code>disable</code> a <code>False</code> para activar esta cuenta.</p>
-        </body>
-        </html>
-        """
-
-        message = MessageSchema(
-            subject=admin_subject,
-            recipients=[admin_email],
-            body=admin_body,
-            subtype=MessageType.html
-        )
-        await fm.send_message(message)
-        print(f"✅ Email de notificación enviado al administrador: {admin_email}")
-
+        user = await verify_user_account(username, email, session)
+        
         html_response = f"""
         <!DOCTYPE html>
         <html lang="es">
@@ -76,21 +39,29 @@ async def verify_user_account(username: str, email: str, session: SessionDep):
                 <div class="status">
                     <p style="margin: 0; color: #856404;">
                         <strong>⚠️ Pendiente de activación final</strong><br>
-                        Hemos notificado al administrador. En cuanto revise y active tu cuenta, recibirás un correo de confirmación.
+                        Hemos notificado al administrador. En cuanto revise y active tu cuenta, 
+                        recibirás un correo de confirmación y ya podrás iniciar sesión.
                     </p>
                 </div>
+                <p style="font-size: 14px; color: #6c757d;">
+                    Usuario: <strong>{username}</strong><br>
+                    Email: <strong>{email}</strong>
+                </p>
                 <a href="http://localhost:4200" class="btn">Volver a la aplicación</a>
             </div>
         </body>
         </html>
         """
         return html_response
-
+        
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"❌ Error al verificar cuenta: {str(e)}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error al verificar la cuenta: {str(e)}")
+
 
 @router.post("/send-email")
 async def send_email():
