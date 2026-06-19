@@ -19,6 +19,8 @@ from fastapi.templating import Jinja2Templates
 from email.mime.image import MIMEImage
 import traceback   
 from fastapi.responses import HTMLResponse 
+from app.models import Users, Foto, Usercreate
+from app.schemas import UsersUpdate, FotoUpdate, Token, TokenData, PasswordRecoverRequest, PasswordValidateRequest
 
 # Usar Jinja2 como motor de plantillas
 
@@ -100,7 +102,7 @@ templates = Jinja2Templates(directory="templates")
    Aparte, para que la columna Id aparezca la primera, deberá procesarse en primer lugar.
 '''
 # Id como primer campo. Para que el campo 'id' aparezca el primero debe procesarse antes
-class Userid(SQLModel):
+'''class Userid(SQLModel):
     id: int | None = Field(default=None, primary_key=True)
 
 # Base común
@@ -156,7 +158,7 @@ class FotoUpdate(BaseModel):
     comment: Optional[str] = None
     shot_date: Optional[date] = None
     tag: Optional[str] = None
-    video: Optional[bool] = False
+    video: Optional[bool] = False'''
 
 
 
@@ -195,14 +197,14 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 300
 
 # Clase Token
-class Token(BaseModel):
+'''class Token(BaseModel):
     access_token: str
     token_type: str
     user_logged: str
     user_id: int
 
 class TokenData(BaseModel):
-    username: str | None = None    
+    username: str | None = None  '''  
 
 
 
