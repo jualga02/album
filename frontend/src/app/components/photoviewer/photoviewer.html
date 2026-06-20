@@ -1,0 +1,55 @@
+
+
+@if (isOpen() && currentMedia()) {
+  <div class="viewer-backdrop" (click)="close()">
+    <div class="viewer-container" (click)="$event.stopPropagation()">
+      
+      <!-- Botón Cerrar -->
+      <button class="close-btn" (click)="close()" title="Cerrar">✕</button>
+
+      <!-- Navegación Izquierda -->
+      @if (currentIndex() > 0) {
+        <button class="nav-btn left" (click)="prev()" title="Anterior">❮</button>
+      }
+
+      <!-- Contenedor del Medio -->
+      <div class="image-wrapper">
+        @if (currentMedia()?.video) {
+          <!-- REPRODUCTOR DE VIDEO -->
+          <video 
+            #videoPlayer
+            class="full-video" 
+            [src]="currentMedia()?.url" 
+            controls 
+            playsinline
+            (click)="$event.stopPropagation()">
+            Tu navegador no soporta la reproducción de video.
+          </video>
+        } @else {
+          <!-- VISUALIZADOR DE IMAGEN -->
+          <img 
+            class="full-image" 
+            [src]="currentMedia()?.url" 
+            [style.transform]="'scale(' + zoom() + ')'"
+            alt="Vista previa"
+            (click)="$event.stopPropagation()"
+          />
+        }
+      </div>
+
+      <!-- Navegación Derecha -->
+      @if (currentIndex() < filteredMedia().length - 1) {
+        <button class="nav-btn right" (click)="next()" title="Siguiente">❯</button>
+      }
+
+      <!-- Controles de Zoom (Solo visibles si es foto) -->
+      @if (currentMedia()?.video === false) {
+        <div class="zoom-controls">
+          <button (click)="zoomOut()" title="Alejar">−</button>
+          <span>{{ (zoom() * 100).toFixed(0) }}%</span>
+          <button (click)="zoomIn()" title="Acercar">+</button>
+        </div>
+      }
+    </div>
+  </div>
+}

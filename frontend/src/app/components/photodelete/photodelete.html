@@ -1,0 +1,82 @@
+<div class="container mt-4 p-0" style="max-width: 600px;">
+  <div class="card shadow-sm border-0">
+    <div class="card-body p-4">
+      <h3 class="card-title mb-4 text-primary fs-4 fw-bold">Borrar foto <span class="text-dark">{{ photoTitle }}</span></h3>
+      <h4 class="card-subtitle mb-4 text-secondary fs-6 fw-medium">No habrá posibilidad de recuperación.<br>¿Estás seguro de querer eliminar esta foto?</h4>
+      
+     <!-- form [formGroup]="form" (ngSubmit)="onSubmit()" class="needs-validation">-->
+      <form class="needs-validation">
+        <!-- Mensajes para el usuario -->
+        <div class="mb-3">
+          @if (successMessage) {
+            <div class="alert alert-success" role="alert">
+              <strong>Borrado correcto:</strong>
+              <div>{{ successMessage }}</div>
+              <div class="small text-muted">La foto ya está eliminda de tu álbum.</div>
+            </div>
+          }
+          @if (errorMessage){
+            <div class="alert alert-danger" role="alert">
+              <strong>Error:</strong>
+              <div>{{ errorMessage }}</div>
+              <div class="small text-muted">Si el problema persiste, contacta con el administrador..</div>
+            </div>
+         }
+        </div>
+        
+        <!-- Fecha 
+        <div class="mb-3">
+          <label for="shot_date" class="form-label fw-semibold text-black small">
+            Fecha <span class="text-muted fw-normal">(Cuando se hizo)</span>
+          </label>
+          <input formControlName="shot_date" type="date" id="shot_date" class="form-control">
+        </div>-->
+
+        <!-- Comentario 
+        <div class="mb-3">
+          <label for="comment" class="form-label fw-semibold text-black small">Comentario</label>
+          <textarea formControlName="comment" id="comment" class="form-control" rows="3" placeholder="Escribe una descripción..."></textarea>
+        </div>-->
+
+        <!-- Alias 
+        <div class="mb-3">
+          <label for="title" class="form-label fw-semibold text-black small">
+            Título <span class="text-muted fw-normal">(El nombre de archivo suele ser feo)</span>
+          </label>
+          <input formControlName="title" type="text" id="title" class="form-control" placeholder="ej. Mis amigos del Insti del curso pasado">
+        </div>-->
+
+        <!-- Etiquetas
+        <div class="mb-3">
+          <label for="tag" class="form-label fw-semibold text-black small">
+            Etiquetas <span class="text-muted fw-normal">(Para búsquedas posteriores)</span>
+          </label>
+          <input formControlName="tag" type="text" id="tag" class="form-control" placeholder="ej. vacaciones, verano, familia">
+        </div> -->
+
+        <!-- Selección de Archivo 
+        <div class="mb-3">
+          <label for="file_input" class="form-label fw-semibold text-black small">Selecciona foto o vídeo <span class="text-danger text-opacity-75  fw-normal"> (campo obligatorio)</span></label>
+          <input #fileInput  type="file" id="file_input" (change)="onFileSelect($event)" accept="image/*,video/*" class="form-control">
+          <div class="form-text mt-1" *ngIf="file.name">Archivo seleccionado: {{ file.name }}</div>
+          <div class="form-text text-danger mt-1" *ngIf="!file.name">Debes seleccionar un archivo antes de subir.</div>
+        </div>-->
+
+        <!-- Checkbox Vídeo 
+        <div class="mb-4 form-check form-switch">
+          <input type="checkbox" formControlName="video" id="video_check" class="form-check-input" role="switch">
+          <label for="video_check" class="form-check-label fw-medium text-secondary">Actívalo si es un vídeo</label>
+        </div>-->
+
+        <!-- Botón de Envío -->
+        <div class="d-grid">
+          <button type="button" (click)="onSubmit()" class="btn btn-primary py-2 fw-bold">
+            Borrar foto
+          </button>
+        </div>
+
+      </form>
+    </div>
+  </div>
+</div>
+

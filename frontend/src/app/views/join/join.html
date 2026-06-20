@@ -1,0 +1,130 @@
+<!-- login-modal.component.html -->
+<div class="modal fade" #bootstrapModal tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content p-4 bg-body-tertiary shadow">
+      
+      <!-- Botón de cerrar de Bootstrap en la esquina superior derecha -->
+      <div class="d-flex justify-content-end">
+        <button type="button" class="btn-close" (click)="cerrarModal()" aria-label="Close"></button>
+      </div>
+
+      <!-- Tu código original adaptado y centrado -->
+      <main class="form-signin w-100 m-auto">
+        <form class="text-center" (ngSubmit)="onSubmit(); $event.preventDefault()" [formGroup]="form">
+          <img
+            class="mb-4 mx-auto d-block"
+            src="logo_ac.png"
+            alt="Logo"
+            width="100"
+            height="100"
+          />
+          
+          <h1 class="h3 mb-3 fw-normal">¡Regístrate!</h1>
+
+          @if (successMessage) {
+            <div class="alert alert-success text-start" role="alert">
+              <strong>Cuenta creada:</strong>
+              <div>{{ successMessage }}</div>
+              <div class="small text-muted">Ya puedes iniciar sesión con tus datos.</div>
+            </div>
+          }
+
+          @if (errorMessage) {
+            <div class="alert alert-danger text-start" role="alert">
+              <strong>No se pudo crear la cuenta:</strong>
+              <div>{{ errorMessage }}</div>
+              <div class="small text-muted">Revisa los datos y vuelve a intentarlo.</div>
+            </div>
+          }
+
+          <div class="form-floating mb-2">
+            <input
+              type="text"
+              class="form-control"
+              id="username"
+              placeholder="usuario"
+              formControlName="username"
+            />
+            <label for="username">Nombre de usuario</label>
+            @if (form.get('username')?.touched && form.get('username')?.hasError('required')) {
+              <div class="text-danger small mt-1">El nombre de usuario es obligatorio.</div>
+            }
+          </div>
+
+          <div class="form-floating mb-2">
+            <input
+              type="text"
+              class="form-control"
+              id="full_name"
+              placeholder="Nombre completo"
+              formControlName="full_name"
+            />
+            <label for="full_name">Nombre completo</label>
+            @if (form.get('full_name')?.touched && form.get('full_name')?.hasError('required')) {
+              <div class="text-danger small mt-1">El nombre completo es obligatorio.</div>
+            }
+          </div>
+          
+          <div class="form-floating mb-2">
+            <input
+              type="email"
+              class="form-control"
+              id="floatingInput"
+              placeholder="name@example.com"
+              formControlName="email"
+            />
+            <label for="floatingInput">Email</label>
+            @if (form.get('email')?.touched && form.get('email')?.hasError('required')) {
+              <div class="text-danger small mt-1">El email es obligatorio.</div>
+            } @else if (form.get('email')?.touched && form.get('email')?.hasError('pattern')) {
+              <div class="text-danger small mt-1">Introduce un email válido, por ejemplo usuario@dominio.com.</div>
+            }
+          </div>
+          
+          <div class="form-floating mb-3">
+            <input
+              type="password"
+              class="form-control"
+              id="floatingPassword_1"
+              placeholder="Password"
+              formControlName="password_1"
+            />
+            <label for="floatingPassword">Contraseña</label>
+            @if (form.get('password_1')?.touched && form.get('password_1')?.hasError('required')) {
+              <div class="text-danger small mt-1">La contraseña es obligatoria.</div>
+            }
+          </div>
+
+          <div class="form-floating mb-3">
+            <input
+              type="password"
+              class="form-control"
+              id="floatingPassword_2"
+              placeholder="Password"
+              formControlName="password_2"
+            />
+            <label for="floatingPassword_2">Repite contraseña</label>
+            @if (form.get('password_2')?.touched && form.get('password_2')?.hasError('required')) {
+              <div class="text-danger small mt-1">Repetir la contraseña es obligatorio.</div>
+            }
+          </div>
+
+          @if (form.hasError('passwordsMismatch') && (form.get('password_1')?.touched || form.get('password_2')?.touched)) {
+            <div class="text-danger small mb-3">
+              Las contraseñas no coinciden.
+            </div>
+          }
+          
+         
+          
+          <button class="btn btn-primary w-100 py-2" type="submit" [disabled]="form.invalid">
+            Suscribirse
+          </button>
+          
+          <p class="mt-4 mb-0 text-body-secondary">&copy; 2026</p>
+        </form>
+      </main>
+
+    </div>
+  </div>
+</div>

@@ -1,0 +1,133 @@
+<!-- login-modal.component.html -->
+<div class="modal fade" #bootstrapModal tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content p-4 bg-body-tertiary shadow">
+      
+      <!-- Botón de cerrar de Bootstrap en la esquina superior derecha -->
+      <div class="d-flex justify-content-end">
+        <button type="button" class="btn-close" (click)="cerrarModal()" aria-label="Close"></button>
+      </div>
+
+      <!-- Tu código original adaptado y centrado -->
+      <main class="form-signin w-100 m-auto">
+        <form class="text-center" (ngSubmit)="onSubmit($event)" [formGroup]="loginForm">
+          <img
+            class="mb-4 mx-auto d-block"
+            src="logo_ac.png"
+            alt="Logo"
+            width="100"
+            height="100"
+          />
+          
+          <h1 class="h3 mb-3 fw-normal">¡Inicia sesión!</h1>
+
+          @if (errorMessage) {
+            <div class="alert alert-danger text-start" role="alert">
+              <strong>Error de acceso:</strong>
+              <div>{{ errorMessage }}</div>
+              <div class="small text-muted">Comprueba el correo y la contraseña, o vuelve a intentarlo en unos segundos.</div>
+            </div>
+          }
+          
+          <div class="form-floating mb-2">
+            <input
+              type="email"
+              class="form-control"
+              id="floatingInput"
+              placeholder="name@example.com"
+              formControlName="email"
+            />
+            <label for="floatingInput">Email</label>
+          </div>
+          
+          <div class="form-floating mb-3">
+            <input
+              type="password"
+              class="form-control"
+              id="floatingPassword"
+              placeholder="Password"
+              formControlName="password"
+            />
+            <label for="floatingPassword">Contraseña</label>
+          </div>
+          
+          <div class="form-check text-start my-3">
+            <input
+              class="form-check-input"
+              type="checkbox"
+              value="remember-me"
+              id="checkDefault"
+            />
+            <label class="form-check-label" for="checkDefault">
+              Remember me
+            </label>
+          </div>
+          
+          <button class="btn btn-primary w-100 py-2" type="submit">
+            Enviar
+          </button>
+          
+          <p class="mt-4 mb-0 text-body-secondary">&copy; 2026</p>
+        </form>
+          <hr class="my-4">
+
+          <!-- Sección de Recuperación de Contraseña -->
+          @if (!showRecover) {
+            <a href="javascript:void(0)" (click)="toggleRecoverView()" class="text-decoration-none text-muted small d-block text-center">
+              ¿Olvidaste tu contraseña?
+            </a>
+          }
+
+          @if (showRecover) {
+            <div class="mt-3 p-3 bg-light rounded border">
+              <h6 class="text-center mb-3 fw-normal">Recuperar Contraseña</h6>
+              
+              @if (recoverMessage) {
+                <!-- Mensaje de Éxito -->
+                <div class="alert alert-success small text-center">
+                  <strong>¡Mensaje enviado!</strong><br>
+                  {{ recoverMessage }}
+                  <button class="btn btn-sm btn-link d-block mx-auto mt-2 text-decoration-none fw-bold" (click)="toggleRecoverView()">
+                    ← Volver 
+                  </button>
+                </div>
+              } @else {
+                <!-- Formulario de Envío -->
+                <div class="form-floating mb-3">
+                  <input type="email" class="form-control" id="recoverEmail" placeholder="nombre@ejemplo.com" [formControl]="recoverEmailControl">
+                  <label for="recoverEmail">Email registrado</label>
+                </div>
+                
+                @if (recoverError) {
+                  <div class="text-danger small mb-2 text-center">{{ recoverError }}</div>
+                }
+
+                <!-- Botón con estado de carga -->
+                <button 
+                  class="w-100 btn btn-lg btn-primary mb-2 d-flex align-items-center justify-content-center" 
+                  type="button" 
+                  (click)="sendRecoverEmail()" 
+                  [disabled]="isSending || !recoverEmailControl.value">
+                  
+                  @if (isSending) {
+                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                    Enviando...
+                  } @else {
+                    Enviar 
+                  }
+                </button>
+                
+                <button class="w-100 btn btn-sm btn-outline-secondary" type="button" (click)="toggleRecoverView()" [disabled]="isSending">
+                  Cancelar
+                </button>
+              }
+            </div>
+          }
+
+          <p class="mt-4 mb-3 text-muted">&copy; 2026</p>
+      </main>
+
+    </div>
+  </div>
+</div>
+

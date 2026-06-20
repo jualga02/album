@@ -1,0 +1,90 @@
+<!-- login-modal.component.html -->
+<div class="modal fade" #bootstrapModal tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content p-4 bg-body-tertiary shadow">
+      
+      <!-- Botón de cerrar de Bootstrap en la esquina superior derecha -->
+      <div class="d-flex justify-content-end">
+        <button type="button" class="btn-close" (click)="cerrarModal()" aria-label="Close"></button>
+      </div>
+
+      <!-- Tu código original adaptado y centrado -->
+      <main class="form-signin w-100 m-auto">
+        <form class="text-center" (ngSubmit)="onSubmit(); $event.preventDefault()" [formGroup]="form">
+          <img
+            class="mb-4 mx-auto d-block"
+            src="logo_ac.png"
+            alt="Logo"
+            width="100"
+            height="100"
+          />
+          
+          <h1 class="h3 mb-3 fw-normal">Modificar perfil de usuario</h1>
+          <h6 class="mb-3 text-body-secondary">Los campos no editados mantendrán sus valores actuales</h6>
+
+          @if (successMessage) {
+            <div class="alert alert-success text-start" role="alert">
+              <strong>Actualización exitosa:</strong>
+              <div>{{ successMessage }}</div>
+              <div class="small text-muted">
+                Tus datos han sido modificados.<br>
+                Si has cambiado el email, deberás usarlo en tu próximo inicio de sesión.
+              </div>
+            </div>
+          }
+
+          @if (errorMessage) {
+            <div class="alert alert-danger text-start" role="alert">
+              <strong>No se pudo actualizar el perfil:</strong>
+              <div>{{ errorMessage }}</div>
+              <div class="small text-muted">Revisa los datos y vuelve a intentarlo.</div>
+            </div>
+          }
+
+          <div class="form-floating mb-2">
+            <input
+              type="text"
+              class="form-control"
+              id="username"
+              placeholder="usuario"
+              formControlName="username"
+            />
+            <label for="username">Nombre de usuario</label>
+          </div>
+
+          <div class="form-floating mb-2">
+            <input
+              type="text"
+              class="form-control"
+              id="full_name"
+              placeholder="Nombre completo"
+              formControlName="full_name"
+            />
+            <label for="full_name">Nombre completo</label>
+          </div>
+          
+          <div class="form-floating mb-2">
+            <input
+              type="email"
+              class="form-control"
+              id="floatingInput"
+              placeholder="name@example.com"
+              formControlName="email"
+            />
+            <label for="floatingInput">Email</label>
+            @if (form.get('email')?.touched && form.get('email')?.hasError('pattern')) {
+              <div class="text-danger small mt-1">Introduce un email válido, por ejemplo usuario@dominio.com.</div>
+            }
+          </div>
+
+          <button class="btn btn-primary w-100 py-2" type="submit" [disabled]="form.invalid">
+            Actualizar perfil
+          </button>
+          
+          <p class="mt-4 mb-0 text-body-secondary">&copy; 2026</p>
+        </form>
+      </main>
+
+    </div>
+  </div>
+</div>

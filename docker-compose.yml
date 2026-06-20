@@ -1,0 +1,45 @@
+services:
+  # ===========================================
+  # BACKEND: FastAPI + Gunicorn
+  # ===========================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: album-backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      - DATABASE_PATH=/app/data/db/album.db
+      - MEDIA_PATH=/app/data/media
+    volumes:
+      # BBDD en disco local
+      - ./data/db:/app/data/db
+      # Fotos/videos en volumen local (simula RAID 5)
+      - ./data/media:/app/data/media
+    ports:
+      - "8000:8000"
+    networks:
+      - album_net
+
+  # ===========================================
+  # FRONTEND: Angular + Nginx
+  # ===========================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: album-frontend
+    restart: unless-stopped
+    ports:
+      - "4200:80"
+    networks:
+      - album_net
+    depends_on:
+      - backend
+
+networks:
+  album_net:
+    name: album_net
+    driver: bridge

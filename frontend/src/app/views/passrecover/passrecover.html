@@ -1,0 +1,74 @@
+<!-- Contenedor principal del Modal de Bootstrap -->
+<div class="modal fade" id="passrecoverModal" tabindex="-1" aria-labelledby="passrecoverModalLabel" aria-hidden="true" #bootstrapModal>
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      
+      <!-- Cabecera del Modal -->
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title w-100 text-center fw-bold" id="passrecoverModalLabel">Recuperar Contraseña</h5>
+        <button type="button" class="btn-close" aria-label="Close" (click)="cerrarModal()"></button>
+      </div>
+
+      <!-- Cuerpo del Modal -->
+      <div class="modal-body">
+        <main class="form-signin w-100 m-auto text-center">
+          
+          <!-- Estado: Éxito -->
+          @if (successMessage) {
+            <div class="alert alert-success small text-center">
+              <div class="mb-2" style="font-size: 2.5rem;">✅</div>
+              <strong>¡Éxito!</strong><br>
+              {{ successMessage }}
+              <p class="mt-2 mb-0 text-muted">Redirigiendo al inicio de sesión...</p>
+            </div>
+          }
+
+          <!-- Estado: Error -->
+          @if (errorMessage) {
+            <div class="alert alert-danger small text-center">
+              <div class="mb-2" style="font-size: 2.5rem;">⚠️</div>
+              <strong>Enlace no válido</strong><br>
+              {{ errorMessage }}
+              <button class="btn btn-sm btn-primary mt-3 w-100" (click)="cerrarModal()">
+                Volver al inicio de sesión
+              </button>
+            </div>
+          }
+
+          <!-- Estado: Formulario de recuperación -->
+          @if (!successMessage && !errorMessage) {
+            <form [formGroup]="passForm" (ngSubmit)="onSubmit()">
+              <p class="text-muted small mb-4">Introduce tu nueva contraseña para tu cuenta.</p>
+
+              <div class="form-floating mb-3">
+                <input type="password" class="form-control" id="newPassword" formControlName="newPassword" placeholder="Nueva contraseña">
+                <label for="newPassword">Nueva contraseña</label>
+                @if (passForm.get('newPassword')?.invalid && passForm.get('newPassword')?.touched) {
+                  <div class="text-danger small mt-1 text-start">Mínimo 6 caracteres.</div>
+                }
+              </div>
+
+              <div class="form-floating mb-3">
+                <input type="password" class="form-control" id="confirmPassword" formControlName="confirmPassword" placeholder="Confirmar contraseña">
+                <label for="confirmPassword">Confirmar contraseña</label>
+                @if (passForm.errors?.['mismatch'] && passForm.get('confirmPassword')?.touched) {
+                  <div class="text-danger small mt-1 text-start">Las contraseñas no coinciden.</div>
+                }
+              </div>
+
+              <button class="w-100 btn btn-lg btn-primary mb-3" type="submit" [disabled]="passForm.invalid">
+                Actualizar Contraseña
+              </button>
+              
+              <button class="w-100 btn btn-sm btn-outline-secondary" type="button" (click)="cerrarModal()">
+                Cancelar
+              </button>
+            </form>
+          }
+
+          <p class="mt-4 mb-3 text-muted">&copy; 2026</p>
+        </main>
+      </div>
+    </div>
+  </div>
+</div>

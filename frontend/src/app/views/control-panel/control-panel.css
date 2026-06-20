@@ -1,0 +1,38 @@
+/* Asegurar que el modal sea lo suficientemente ancho para la tabla */
+.modal-dialog {
+  max-width: 800px;
+}
+
+/* Estilos suaves para la tabla */
+.table th {
+  font-weight: 600;
+  color: #495057;
+  border-bottom: 2px solid #dee2e6;
+}
+
+.table tbody tr {
+  transition: background-color 0.2s ease-in-out;
+}
+
+/* Efecto hover en el botón de validar */
+.btn-success {
+  transition: all 0.2s ease-in-out;
+}
+
+.btn-success:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px -1px rgba(25, 135, 84, 0.3);
+}
+
+/* Ajustes para móviles */
+@media (max-width: 576px) {
+  .table th, .table td {
+    font-size: 0.875rem;
+    padding: 0.5rem;
+  }
+  
+  .btn-success {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+  }
+}

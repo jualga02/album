@@ -1,0 +1,87 @@
+<div class="modal fade" #bootstrapModal tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow-lg">
+      
+      <!-- CABECERA (Se mantiene limpia) -->
+      <div class="modal-header border-0 pb-0">
+        <h1 class="modal-title fs-5 fw-bold">Tu Perfil</h1>
+        <button type="button" class="btn-close" aria-label="Close" (click)="cerrarModal()"></button>
+      </div>
+
+      <!-- CUERPO (Aquí va el diseño profesional) -->
+      <div class="modal-body pt-2 px-4 pb-4">
+        
+        @if (isLoading) {
+          <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+              <span class="visually-hidden">Cargando...</span>
+            </div>
+            <p class="text-muted mt-2">Cargando tus datos...</p>
+          </div>
+        } @else if (userData) {
+          
+            <!-- 1. Avatar con iniciales y nombre -->
+            <div class="text-center mb-4 pb-3 border-bottom">
+              <img
+                class="mb-4 mx-auto d-block"
+                src="logo_ac.png"
+                alt="Logo"
+                width="100"
+                height="100"
+              />
+            <!--  <div class="profile-avatar rounded-circle bg-primary bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3 text-primary"> -->
+                <!-- Mostramos la primera letra del nombre completo -->
+             <!--   <span class="fw-bold">{{ userData.full_name?.charAt(0) || 'U' }}</span>
+              </div> -->
+              <h4 class="fw-bold mb-1">{{ userData.full_name || 'Usuario' }}</h4>
+              <span class="badge rounded-pill text-bg-light border px-3 py-2">
+                @{{ userData.username }}
+              </span>
+            </div>
+
+            <!-- 2. Tarjetas de detalles -->
+            <div class="row g-3">
+              <div class="col-12">
+                <div class="info-card p-3 bg-body-tertiary rounded-3 border">
+                  <small class="text-uppercase text-muted fw-semibold" style="font-size: 0.7rem; letter-spacing: 0.5px;">Correo electrónico</small>
+                  <div class="fs-6 fw-medium text-break mt-1">{{ userData.email }}</div>
+                </div>
+              </div>
+              
+              <div class="col-12">
+                <div class="info-card p-3 bg-body-tertiary rounded-3 border">
+                  <small class="text-uppercase text-muted fw-semibold" style="font-size: 0.7rem; letter-spacing: 0.5px;">Nombre completo</small>
+                  <div class="fs-6 fw-medium mt-1">{{ userData.full_name || 'No especificado' }}</div>
+                </div>
+              </div>
+
+              <div class="col-12">
+                <div class="info-card p-3 bg-body-tertiary rounded-3 border">
+                  <small class="text-uppercase text-muted fw-semibold" style="font-size: 0.7rem; letter-spacing: 0.5px;">Nombre de usuario</small>
+                  <div class="fs-6 fw-medium mt-1">{{ userData.username }}</div>
+                </div>
+              </div>
+            </div>
+
+        } @else {
+          <div class="alert alert-warning text-center mb-0">
+            No se ha podido cargar la información del perfil.
+          </div>
+        }
+
+      </div>
+
+      <!-- PIE (Botones de acción) -->
+      <div class="modal-footer border-0 pt-0">
+        <button type="button" class="btn btn-light border" (click)="cerrarModal()">Cerrar</button>
+        <button type="button" class="btn btn-primary px-4" (click)="modifyProfile()">
+          Modificar
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+
+

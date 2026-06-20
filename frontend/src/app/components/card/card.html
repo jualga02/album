@@ -1,0 +1,43 @@
+<div class="col">
+    <div class="card shadow-sm">
+        @if (video) {
+            <img [src]="videoLogo"  alt="Foto de prueba" class="card-img-top img-fluid"  (click)="onClickWatch()">
+        } @else {
+            <img [src]="link"  alt="Foto de prueba" class="card-img-top img-fluid"  (click)="onClickWatch()">
+        }
+        
+        <div class="card-body">
+            <p class="card-text">{{ comment }}</p>
+            <!-- NUEVA FILA: Etiquetas al principio y Fecha al final -->
+            <div class="d-flex justify-content-between align-items-center small text-body-secondary mb-3">
+                <!-- Tag al principio -->
+                <span class="text-truncate" style="max-width: 60%;">
+                    #: {{ tag || 'sin-etiquetas' }}
+                </span>
+                
+                <!-- Fecha al final -->
+                <span class="text-nowrap">
+                     {{ shot_date | date:'dd/MM/yyyy' }}
+                </span>
+            </div>
+            <div class="card-actions d-flex flex-column align-items-center w-100">
+                <small class="card-title text-primary fw-bold text-center text-break w-100">
+                    {{ title }}
+                </small>
+                <div class="btn-group btn-group-sm justify-content-center card-buttons">
+                    <button type="button" class="btn btn-sm btn-outline-success card-action-btn" (click)="onClickWatch()" >
+                        Ver
+                    </button>
+                    @if(owner){
+                        <button type="button" class="btn btn-sm btn-outline-warning card-action-btn" (click)="onClickEdit()" >
+                            Editar
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-danger card-action-btn" (click)="onClickDelete()" >
+                            Borrar
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
