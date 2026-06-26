@@ -80,19 +80,45 @@ export class ControlPanel implements OnInit, AfterViewInit {
     });
   }
 
+  // cerrarModal() {
+  //   if (this.modalInstance) {
+  //     const element = this.modalElement()?.nativeElement;
+  //     if (element) {
+  //       element.addEventListener('hidden.bs.modal', () => {
+  //         this.router.navigate(['/']);
+  //       }, { once: true });
+  //       this.modalInstance.hide();
+  //     } else {
+  //       this.router.navigate(['/']);
+  //     }
+  //   } else {
+  //     this.router.navigate(['/']);
+  //   }
+  // }
+  
   cerrarModal() {
     if (this.modalInstance) {
       const element = this.modalElement()?.nativeElement;
       if (element) {
         element.addEventListener('hidden.bs.modal', () => {
-          this.router.navigate(['/']);
+          // 1️⃣ Redirigimos a la raíz y 2️⃣ recargamos la página al completarse
+          this.router.navigate(['/']).then(() => {
+            window.location.reload();
+          });
         }, { once: true });
+        
         this.modalInstance.hide();
       } else {
-        this.router.navigate(['/']);
+        // Fallback si el elemento del modal no existe
+        this.router.navigate(['/']).then(() => {
+          window.location.reload();
+        });
       }
     } else {
-      this.router.navigate(['/']);
+      // Fallback si la instancia de Bootstrap no existe
+      this.router.navigate(['/']).then(() => {
+        window.location.reload();
+      });
     }
   }
 

@@ -51,41 +51,92 @@ export class Logout implements OnInit, AfterViewInit{
     }
   }
 
-  public closeSession(): void {
+  // public closeSession(): void {
+  //   window.sessionStorage.removeItem('token');
+  //   window.sessionStorage.removeItem('user_id');
+  //   this.authService.updateUserLogged(null);
+  //   // Esperar a que el modal se cierre para que Bootstrap limpie la clase del body
+  //   if (this.modalInstance) {
+  //     const element = this.modalElement()?.nativeElement;
+  //     if (element) {
+  //       element.addEventListener('hidden.bs.modal', () => {
+  //         this.router.navigate(['/']);
+  //       }, { once: true });
+  //       this.modalInstance.hide();
+  //       return;
+  //     }
+  //   }
+  //   this.router.navigate(['/']);
+  // }
+
+    public closeSession(): void {
+    // 1️⃣ MANTENEMOS: Las tareas originales de limpieza de sesión
     window.sessionStorage.removeItem('token');
     window.sessionStorage.removeItem('user_id');
     this.authService.updateUserLogged(null);
-    // Esperar a que el modal se cierre para que Bootstrap limpie la clase del body
+
+    // 2️⃣ MODIFICAMOS: Cierre de modal y recarga de página para evitar bucles
     if (this.modalInstance) {
       const element = this.modalElement()?.nativeElement;
       if (element) {
         element.addEventListener('hidden.bs.modal', () => {
-          this.router.navigate(['/']);
+          // Primero redirigimos a '/' para salir de la ruta '/logout'
+          // Luego recargamos la página para limpiar cualquier rastro de Bootstrap/Estado
+          this.router.navigate(['/']).then(() => {
+            window.location.reload();
+          });
         }, { once: true });
+        
         this.modalInstance.hide();
         return;
       }
     }
-    this.router.navigate(['/']);
+    
+    // Fallback por si el modal o el elemento no existieran por alguna razón
+    this.router.navigate(['/']).then(() => {
+      window.location.reload();
+    });
   }
+
+  // cerrarModal() {
+  //   if (this.modalInstance) {
+  //     const element = this.modalElement()?.nativeElement;
+
+  //     if (element){
+  //       element.addEventListener('hidden.bs.modal', () => {
+  //         this.router.navigate(['/']);
+  //       }, { once: true });
+        
+  //       this.modalInstance.hide();
+  //     } else {
+  //       this.router.navigate(['/']);
+  //     }
+
+
+  //   } else {
+  //     this.router.navigate(['/']);
+  //   }
+  // }
 
   cerrarModal() {
     if (this.modalInstance) {
       const element = this.modalElement()?.nativeElement;
-
-      if (element){
+      if (element) {
         element.addEventListener('hidden.bs.modal', () => {
-          this.router.navigate(['/']);
+          // 1️⃣ Primero redirigimos a la ruta raíz ('/') para salir de '/logout'
+          // 2️⃣ Cuando la navegación sea exitosa (.then), recargamos la página
+          this.router.navigate(['/']).then(() => {
+            window.location.reload();
+          });
         }, { once: true });
         
         this.modalInstance.hide();
       } else {
-        this.router.navigate(['/']);
+        // Si el elemento no existe por alguna razón, redirigimos y recargamos
+        this.router.navigate(['/']).then(() => window.location.reload());
       }
-
-
     } else {
-      this.router.navigate(['/']);
+      this.router.navigate(['/']).then(() => window.location.reload());
     }
   }
   

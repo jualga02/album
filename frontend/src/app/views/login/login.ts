@@ -89,39 +89,51 @@ export class Login implements AfterViewInit{
     }
   }
 
-  cerrarModal() {
-    if (this.modalInstance) {
-      const element = this.modalElement()?.nativeElement;
+  // cerrarModal() {
+  //   if (this.modalInstance) {
+  //     const element = this.modalElement()?.nativeElement;
 
-      if (element){
-        element.addEventListener('hidden.bs.modal', () => {
-          this.router.navigate(['/']);
-        }, { once: true });
+  //     if (element){
+  //       element.addEventListener('hidden.bs.modal', () => {
+  //         this.router.navigate(['/']);
+  //       }, { once: true });
         
-        this.modalInstance.hide();
-      } else {
-        this.router.navigate(['/']);
-      }
+  //       this.modalInstance.hide();
+  //     } else {
+  //       this.router.navigate(['/']);
+  //     }
 
 
+  //   } else {
+  //     this.router.navigate(['/']);
+  //   }
+  //   // Redirige a la ruta principal (o la anterior) para destruir este componente
+  //   this.router.navigate(['/']); 
+  // }
+
+cerrarModal() {
+  if (this.modalInstance) {
+    const element = this.modalElement()?.nativeElement;
+    if (element) {
+      element.addEventListener('hidden.bs.modal', () => {
+        // 1. Navegamos a la ruta raíz ('/')
+        // 2. Cuando termine, recargamos la página en esa nueva URL
+        this.router.navigate(['/']).then(() => {
+          window.location.reload();
+        });
+      }, { once: true });
+      
+      this.modalInstance.hide();
     } else {
-      this.router.navigate(['/']);
+      this.router.navigate(['/']).then(() => window.location.reload());
     }
-    // Redirige a la ruta principal (o la anterior) para destruir este componente
-    this.router.navigate(['/']); 
+  } else {
+    this.router.navigate(['/']).then(() => window.location.reload());
   }
   
-  onSubmit(event: Event) {
-    event.preventDefault();
-    this.errorMessage = null;
+}
+  
 
-    const bodyParams = new HttpParams()
-      .set('username', this.loginForm.value.email || '')
-      .set('password', this.loginForm.value.password || '');
-
-    this.getToken(this.urlT, bodyParams);
-    console.log('Datos enviados correctamente...');
-  }
 
   toggleRecoverView() {
     this.showRecover = !this.showRecover;
@@ -130,6 +142,18 @@ export class Login implements AfterViewInit{
     this.isSending = false;
     this.recoverEmailControl.reset();
   }
+
+onSubmit(event: Event) {
+  event.preventDefault();
+  this.errorMessage = null;
+  const bodyParams = new HttpParams()
+    .set('username', this.loginForm.value.email || '')
+    .set('password', this.loginForm.value.password || '');
+  
+  this.getToken(this.urlT, bodyParams);
+  console.log('Datos enviados correctamente...');
+  
+}
 
   sendRecoverEmail() {
     const email = this.recoverEmailControl.value;

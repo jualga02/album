@@ -104,26 +104,53 @@ export class Updateprofile {
       }
     }
   
-    cerrarModal() {
-      if (this.modalInstance) {
-        const element = this.modalElement()?.nativeElement;
+    // cerrarModal() {
+    //   if (this.modalInstance) {
+    //     const element = this.modalElement()?.nativeElement;
   
-        if (element){
-          element.addEventListener('hidden.bs.modal', () => {
-            this.router.navigate(['default']);
-          }, { once: true });
+    //     if (element){
+    //       element.addEventListener('hidden.bs.modal', () => {
+    //         this.router.navigate(['default']);
+    //       }, { once: true });
           
-          this.modalInstance.hide();
-        } else {
-          this.router.navigate(['default']);
-        }
+    //       this.modalInstance.hide();
+    //     } else {
+    //       this.router.navigate(['default']);
+    //     }
   
   
-      } else {
-        this.router.navigate(['default']);
-      }
-    }
+    //   } else {
+    //     this.router.navigate(['default']);
+    //   }
+    // }
     
+  cerrarModal() {
+    if (this.modalInstance) {
+      const element = this.modalElement()?.nativeElement;
+      if (element) {
+        element.addEventListener('hidden.bs.modal', () => {
+          // 1️⃣ Redirigimos a 'default' y 2️⃣ recargamos la página al completarse
+          this.router.navigate(['default']).then(() => {
+            window.location.reload();
+          });
+        }, { once: true });
+        
+        this.modalInstance.hide();
+      } else {
+        // Fallback si el elemento del modal no existe
+        this.router.navigate(['default']).then(() => {
+          window.location.reload();
+        });
+      }
+    } else {
+      // Fallback si la instancia de Bootstrap no existe
+      this.router.navigate(['default']).then(() => {
+        window.location.reload();
+      });
+    }
+  }
+
+
     onSubmit() {
       if (this.form.valid) {
         this.patchUser(this.url);

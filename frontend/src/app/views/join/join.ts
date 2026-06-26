@@ -107,26 +107,55 @@ export class Join {
     }
   }
 
-  cerrarModal() {
+  // cerrarModal() {
+  //   if (this.modalInstance) {
+  //     const element = this.modalElement()?.nativeElement;
+
+  //     if (element){
+  //       element.addEventListener('hidden.bs.modal', () => {
+  //         this.router.navigate(['/']);
+  //       }, { once: true });
+        
+  //       this.modalInstance.hide();
+  //     } else {
+  //       this.router.navigate(['/']);
+  //     }
+
+
+  //   } else {
+  //     this.router.navigate(['/']);
+  //   }
+  //   // Redirige a la ruta principal (o la anterior) para destruir este componente
+  //   this.router.navigate(['/']); 
+  // }
+
+    cerrarModal() {
     if (this.modalInstance) {
       const element = this.modalElement()?.nativeElement;
-
-      if (element){
+      if (element) {
         element.addEventListener('hidden.bs.modal', () => {
-          this.router.navigate(['/']);
+          // 1️⃣ Redirigimos a la raíz y 2️⃣ recargamos la página al completarse
+          this.router.navigate(['/']).then(() => {
+            window.location.reload();
+          });
         }, { once: true });
         
         this.modalInstance.hide();
       } else {
-        this.router.navigate(['/']);
+        // Fallback si el elemento del modal no existe
+        this.router.navigate(['/']).then(() => {
+          window.location.reload();
+        });
       }
-
-
     } else {
-      this.router.navigate(['/']);
+      // Fallback si la instancia de Bootstrap no existe
+      this.router.navigate(['/']).then(() => {
+        window.location.reload();
+      });
     }
-    // Redirige a la ruta principal (o la anterior) para destruir este componente
-    this.router.navigate(['/']); 
+    // 🗑️ He eliminado la línea `this.router.navigate(['/']);` que tenías al final
+    // del método original, porque era un bug: se ejecutaba siempre, inmediatamente,
+    // cortando la animación del modal y provocando navegaciones duplicadas.
   }
   
   onSubmit() {
